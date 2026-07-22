@@ -5,14 +5,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Columns, Check, Info } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { tableauxData, fusion as fusionApi, rpc } from '@/lib/api';
 import { toast } from 'sonner';
-import type { Json } from '@/integrations/supabase/types';
 
 interface IndicateurData {
   id: number;
-  entetes: Json[][];
-  donnees: Json[][];
+  entetes: any[][];
+  donnees: any[][];
 }
 
 interface SerieIndicateur {
@@ -20,16 +19,16 @@ interface SerieIndicateur {
   code: string;
   titre_fr: string;
   annee: string;
-  donnees: Json[][] | null;
-  entetes?: Json[][];
+  donnees: any[][] | null;
+  entetes?: any[][];
 }
 
 interface ExistingFusion {
   id: number;
   strategie: string;
   colonne_selectionnee: string | null;
-  entetes_fusionnees: Json[][];
-  donnees_fusionnees: Json[][];
+  entetes_fusionnees: any[][];
+  donnees_fusionnees: any[][];
 }
 
 interface FusionStrategyModalProps {
@@ -69,79 +68,58 @@ export const FusionStrategyModal = ({
   const loadData = async () => {
     setLoading(true);
     
-    // Charger la série temporelle complète
-    const { data: serie } = await supabase.rpc('get_serie_temporelle', {
-      p_tableau_id: cibleId
-    });
-    
-    if (serie) {
-      const serieWithHeaders = await Promise.all(
-        serie.map(async (item) => {
-          const { data: dataItem } = await supabase
-            .from('tableaux_data')
-            .select('entetes, donnees')
-            .eq('id_tableau', item.id)
-            .maybeSingle();
-          
-          return {
-            id: item.id,
-            code: item.code,
-            titre_fr: item.titre_fr,
-            annee: item.annee,
-            donnees: (dataItem?.donnees as Json[][]) || null,
-            entetes: (dataItem?.entetes as Json[][]) || []
-          } as SerieIndicateur;
-        })
-      );
-      setSerieData(serieWithHeaders);
-    }
-    
-    // Vérifier s'il existe déjà une fusion pour l'AS le plus récent (cible)
-    // On cherche une fusion existante dans la chaîne
-    const { data: existingFusions } = await supabase
-      .from('tableaux_fusion')
-      .select(`
-        id,
-        strategie,
-        colonne_selectionnee,
-        entetes_fusionnees,
-        donnees_fusionnees,
-        tableaux_liaisons!inner (
-          id_tableau_cible
-        )
-      `)
-      .eq('tableaux_liaisons.id_tableau_cible', cibleId);
-    
-    if (existingFusions && existingFusions.length > 0) {
-      const fusion = existingFusions[0];
-      setExistingFusion({
-        id: fusion.id,
-        strategie: fusion.strategie,
-        colonne_selectionnee: fusion.colonne_selectionnee,
-        entetes_fusionnees: fusion.entetes_fusionnees as Json[][],
-        donnees_fusionnees: fusion.donnees_fusionnees as Json[][]
-      });
-      // Utiliser la même colonne que la fusion existante
-      if (fusion.colonne_selectionnee) {
-        setSelectedColumn(fusion.colonne_selectionnee);
+    try {
+      // Charger la série temporelle complète
+      const serie = await rpc.getSerieTemporelle(cibleId);
+      
+      if (serie) {
+        const serieWithHeaders = await Promise.all(
+          serie.map(async (item: any) => {
+            const dataItem = await tableauxData.getByTableau(item.id);
+            
+            return {
+              id: item.id,
+              code: item.code,
+              titre_fr: item.titre_fr,
+              annee: item.annee,
+              donnees: (dataItem?.donnees as any[][]) || null,
+              entetes: (dataItem?.entetes as any[][]) || []
+            } as SerieIndicateur;
+          })
+        );
+        setSerieData(serieWithHeaders);
       }
-    } else {
-      setExistingFusion(null);
-    }
-    
-    // Charger les données du tableau cible (le plus récent)
-    const { data: cible } = await supabase
-      .from('tableaux_data')
-      .select('*')
-      .eq('id_tableau', cibleId)
-      .maybeSingle();
-    
-    if (cible) {
-      setCibleData({
-        id: cible.id,
-        entetes: cible.entetes as Json[][],
-        donnees: cible.donnees as Json[][]
-      });
+      
+      // Vérifier s'il existe déjà une fusion pour cette liaison
+      const existingFusionData = await fusionApi.getByLiaison(liaisonId);
+      
+      if (existingFusionData) {
+        setExistingFusion({
+          id: existingFusionData.id,
+          strategie: existingFusionData.strategie,
+          colonne_selectionnee: existingFusionData.colonne_selectionnee,
+          entetes_fusionnees: existingFusionData.entetes_fusionnees as any[][],
+          donnees_fusionnees: existingFusionData.donnees_fusionnees as any[][]
+        });
+        if (existingFusionData.colonne_selectionnee) {
+          setSelectedColumn(existingFusionData.colonne_selectionnee);
+        }
+      } else {
+        setExistingFusion(null);
+      }
+      
+      // Charger les données du tableau cible (le plus récent)
+      const cible = await tableauxData.getByTableau(cibleId);
+      
+      if (cible) {
+        setCibleData({
+          id: cible.id,
+          entetes: cible.entetes as any[][],
+          donnees: cible.donnees as any[][]
+        });
+      }
+    } catch (err: any) {
+      toast.error('Erreur lors du chargement', { description: err.message });
     }
     
     setLoading(false);
@@ -163,7 +141,7 @@ export const FusionStrategyModal = ({
   }, [cibleData, existingFusion]);
 
   // Fonction pour fusionner les données - ajoute une colonne année
-  const computeFusion = (): { entetes: Json[][]; donnees: Json[][] } => {
+  const computeFusion = (): { entetes: any[][]; donnees: any[][] } => {
     // Base: soit la fusion existante, soit le tableau cible original
     const baseEntetes = existingFusion?.entetes_fusionnees || cibleData?.entetes || [];
     const baseDonnees = existingFusion?.donnees_fusionnees || cibleData?.donnees || [];
@@ -189,28 +167,28 @@ export const FusionStrategyModal = ({
     const yearLabel = `(${sourceIndex + 1})${sourceAnnee}`;
 
     // Créer les nouvelles entêtes avec l'année source ajoutée
-    const newEntetes: Json[][] = baseEntetes.map((row, rowIndex) => {
+    const newEntetes: any[][] = baseEntetes.map((row, rowIndex) => {
       if (rowIndex === baseEntetes.length - 1) {
         // Dernière ligne d'entête: ajouter la colonne année
         const newRow = [...row];
         // Insérer l'année après la colonne sélectionnée
         newRow.splice(selectedColIndex + 1, 0, yearLabel);
-        return newRow as Json[];
+        return newRow as any[];
       }
       // Pour les autres lignes d'entête, ajouter une cellule vide
       const newRow = [...row];
       newRow.splice(selectedColIndex + 1, 0, '');
-      return newRow as Json[];
+      return newRow as any[];
     });
 
     // Fusionner les données
-    const newDonnees: Json[][] = baseDonnees.map((row, rowIndex) => {
+    const newDonnees: any[][] = baseDonnees.map((row, rowIndex) => {
       const newRow = [...row];
       // Récupérer la valeur de l'année source pour cette ligne
       const sourceValue = sourceData.donnees?.[rowIndex]?.[selectedColIndex] ?? '';
       // Insérer après la colonne sélectionnée
       newRow.splice(selectedColIndex + 1, 0, sourceValue);
-      return newRow as Json[];
+      return newRow as any[];
     });
 
     return { entetes: newEntetes, donnees: newDonnees };
@@ -226,45 +204,25 @@ export const FusionStrategyModal = ({
 
     const fusion = computeFusion();
 
-    // Toujours utiliser "dimension_annee" comme stratégie
-    const { error } = await supabase.from('tableaux_fusion').insert({
-      id_liaison: liaisonId,
-      strategie: 'dimension_annee',
-      colonne_selectionnee: selectedColumn,
-      donnees_fusionnees: fusion.donnees,
-      entetes_fusionnees: fusion.entetes
-    });
+    try {
+      await fusionApi.upsert({
+        id_liaison: liaisonId,
+        strategie: 'dimension_annee',
+        colonne_selectionnee: selectedColumn,
+        donnees_fusionnees: fusion.donnees,
+        entetes_fusionnees: fusion.entetes
+      });
 
-    setSaving(false);
-
-    if (error) {
-      if (error.code === '23505') {
-        // Mise à jour si existe déjà
-        const { error: updateError } = await supabase
-          .from('tableaux_fusion')
-          .update({
-            strategie: 'dimension_annee',
-            colonne_selectionnee: selectedColumn,
-            donnees_fusionnees: fusion.donnees,
-            entetes_fusionnees: fusion.entetes
-          })
-          .eq('id_liaison', liaisonId);
-        
-        if (updateError) {
-          toast.error('Erreur lors de la mise à jour', { description: updateError.message });
-          return;
-        }
-      } else {
-        toast.error('Erreur lors de la sauvegarde', { description: error.message });
-        return;
-      }
+      toast.success('Colonne ajoutée avec succès', {
+        description: `Les données de ${sourceAnnee} ont été ajoutées au tableau ${cibleAnnee}`
+      });
+      onOpenChange(false);
+      onSuccess();
+    } catch (err: any) {
+      toast.error('Erreur lors de la sauvegarde', { description: err.message });
     }
 
-    toast.success('Colonne ajoutée avec succès', {
-      description: `Les données de ${sourceAnnee} ont été ajoutées au tableau ${cibleAnnee}`
-    });
-    onOpenChange(false);
-    onSuccess();
+    setSaving(false);
   };
 
   // Années déjà présentes dans la fusion

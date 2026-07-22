@@ -14,7 +14,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { supabase } from "@/integrations/supabase/client";
+import { rpc, liaisons as liaisonsApi, fusion as fusionApi, views, tableauxData } from '@/lib/api';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,15 +30,15 @@ import {
 } from "@/components/ui/table";
 import { Check, Loader2, Plus, X, ArrowUp, ArrowDown, Eye, GripVertical, RotateCcw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import type { Json } from "@/integrations/supabase/types";
+
 
 interface TableauWithData {
   id: number;
   code: string;
   titre_fr: string;
   annuaire_annee: string;
-  entetes: Json[][];
-  donnees: Json[][];
+  entetes: any[][];
+  donnees: any[][];
 }
 
 interface SelectedColumn {
@@ -54,7 +54,7 @@ interface SeriesBuilderProps {
   adjacents: TableauWithData[];
 }
 
-function buildColumnLabel(entetes: Json[][], colIndex: number): string {
+function buildColumnLabel(entetes: any[][], colIndex: number): string {
   const parts: string[] = [];
   for (const row of entetes) {
     const val = row[colIndex];
@@ -141,7 +141,7 @@ function CompactTablePreview({
               <TableHeader>
                 {tableau.entetes.map((headerRow, rIdx) => (
                   <TableRow key={rIdx}>
-                    {(headerRow as Json[]).map((cell, cIdx) => (
+                    {(headerRow as any[]).map((cell, cIdx) => (
                       <TableHead
                         key={cIdx}
                         className={`px-2 py-1.5 whitespace-nowrap cursor-pointer transition-colors ${
@@ -170,7 +170,7 @@ function CompactTablePreview({
               <TableBody>
                 {previewRows.map((row, rIdx) => (
                   <TableRow key={rIdx}>
-                    {(row as Json[]).map((cell, cIdx) => (
+                    {(row as any[]).map((cell, cIdx) => (
                       <TableCell
                         key={cIdx}
                         className={`px-2 py-1 whitespace-nowrap ${
@@ -241,10 +241,9 @@ export default function SeriesBuilder({ current, adjacents }: SeriesBuilderProps
       setLoadingSeries(true);
 
       // Use the DB function get_serie_temporelle for reliable recursive chain discovery
-      const { data: serieData, error: serieError } = await supabase
-        .rpc("get_serie_temporelle", { p_tableau_id: current.id });
+      const serieData = await rpc.getSerieTemporelle(current.id);
 
-      if (serieError || !serieData || serieData.length <= 1) {
+      if (!serieData || serieData.length <= 1) {
         // No series found (only the current tableau itself)
         setLoadingSeries(false);
         return;
@@ -256,32 +255,26 @@ export default function SeriesBuilder({ current, adjacents }: SeriesBuilderProps
       setSeriesTableauIds(new Set(otherIds));
 
       // Get liaison IDs for the chain (needed for saving later)
-      const { data: liaisons } = await supabase
-        .from("tableaux_liaisons")
-        .select("id")
-        .or(
-          chainIds
-            .map((id) => `id_tableau_source.eq.${id},id_tableau_cible.eq.${id}`)
-            .join(",")
-        );
+      const allLiaisons = await liaisonsApi.getAll(0, 99999);
+      const relevantLiaisons = allLiaisons.filter((l: any) =>
+        chainIds.includes(l.id_tableau_source) || chainIds.includes(l.id_tableau_cible)
+      );
 
-      const liaisonIds = liaisons ? liaisons.map((l) => l.id) : [];
+      const liaisonIds = relevantLiaisons.map((l: any) => l.id);
 
       // Try to load saved fusion FIRST (respects user's column selection & ordering)
       let useSavedFusion = false;
       if (liaisonIds.length > 0) {
-        const { data: fusions } = await supabase
-          .from("tableaux_fusion")
-          .select("*")
-          .in("id_liaison", liaisonIds)
-          .order("created_at", { ascending: false })
-          .limit(1);
+        const allFusions = await fusionApi.getAll(0, 99999);
+        const relevantFusions = allFusions
+          .filter((f: any) => liaisonIds.includes(f.id_liaison))
+          .sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
 
-        if (fusions && fusions.length > 0) {
-          const fusion = fusions[0];
+        if (relevantFusions.length > 0) {
+          const fusion = relevantFusions[0];
           setSavedFusion({
-            entetes: (fusion.entetes_fusionnees as Json[][]).map((r: Json[]) => r.map((c: Json) => String(c ?? ""))),
-            donnees: (fusion.donnees_fusionnees as Json[][]).map((r: Json[]) => r.map((c: Json) => String(c ?? ""))),
+            entetes: (fusion.entetes_fusionnees as any[][]).map((r: any[]) => r.map((c: any) => String(c ?? ""))),
+            donnees: (fusion.donnees_fusionnees as any[][]).map((r: any[]) => r.map((c: any) => String(c ?? ""))),
             liaisonIds,
           });
           useSavedFusion = true;
@@ -290,15 +283,9 @@ export default function SeriesBuilder({ current, adjacents }: SeriesBuilderProps
 
       // Fallback: dynamically compute fusion from raw data if no saved fusion
       if (!useSavedFusion) {
-        const [{ data: allInfos }, { data: allDataRows }] = await Promise.all([
-          supabase
-            .from("v_tableaux_complets")
-            .select("id, annuaire_annee")
-            .in("id", chainIds),
-          supabase
-            .from("tableaux_data")
-            .select("id_tableau, entetes, donnees")
-            .in("id_tableau", chainIds),
+        const [allInfos, allDataRows] = await Promise.all([
+          views.tableauxComplets({ from: 0, to: 99999 }).then(rows => rows.filter((r: any) => chainIds.includes(r.id))),
+          tableauxData.getByTableaux(chainIds),
         ]);
 
         const infoMap = new Map<number, string>();
@@ -306,12 +293,12 @@ export default function SeriesBuilder({ current, adjacents }: SeriesBuilderProps
           allInfos.forEach((r: any) => infoMap.set(r.id, r.annuaire_annee || "?"));
         }
 
-        const dataMap = new Map<number, { entetes: Json[][]; donnees: Json[][] }>();
+        const dataMap = new Map<number, { entetes: any[][]; donnees: any[][] }>();
         if (allDataRows) {
           allDataRows.forEach((r: any) => dataMap.set(r.id_tableau, { entetes: r.entetes, donnees: r.donnees }));
         }
 
-        const chainTableaux: { id: number; annee: string; entetes: Json[][]; donnees: Json[][] }[] = [];
+        const chainTableaux: { id: number; annee: string; entetes: any[][]; donnees: any[][] }[] = [];
 
         for (const tId of chainIds) {
           if (tId === current.id) {
@@ -345,7 +332,7 @@ export default function SeriesBuilder({ current, adjacents }: SeriesBuilderProps
           for (const t of chainTableaux) {
             const numCols = (t.entetes[0] || []).length;
             for (let c = 0; c < numCols; c++) {
-              row.push(r < t.entetes.length ? String((t.entetes[r] as Json[])[c] ?? "") : "");
+              row.push(r < t.entetes.length ? String((t.entetes[r] as any[])[c] ?? "") : "");
             }
           }
           fusedEntetes.push(row);
@@ -357,7 +344,7 @@ export default function SeriesBuilder({ current, adjacents }: SeriesBuilderProps
           for (const t of chainTableaux) {
             const numCols = (t.entetes[0] || []).length;
             for (let c = 0; c < numCols; c++) {
-              row.push(r < t.donnees.length ? String((t.donnees[r] as Json[])[c] ?? "") : "");
+              row.push(r < t.donnees.length ? String((t.donnees[r] as any[])[c] ?? "") : "");
             }
           }
           fusedDonnees.push(row);
@@ -466,7 +453,7 @@ export default function SeriesBuilder({ current, adjacents }: SeriesBuilderProps
         for (const col of selectedColumns) {
           const t = tableauxMap.get(col.tableauId);
           if (t && r < t.entetes.length) {
-            row.push(String((t.entetes[r] as Json[])[col.colIndex] ?? ""));
+            row.push(String((t.entetes[r] as any[])[col.colIndex] ?? ""));
           } else { row.push(""); }
         }
         entetes.push(row);
@@ -477,7 +464,7 @@ export default function SeriesBuilder({ current, adjacents }: SeriesBuilderProps
         for (const col of selectedColumns) {
           const t = tableauxMap.get(col.tableauId);
           if (t && r < t.donnees.length) {
-            row.push(String((t.donnees[r] as Json[])[col.colIndex] ?? ""));
+            row.push(String((t.donnees[r] as any[])[col.colIndex] ?? ""));
           } else { row.push(""); }
         }
         donnees.push(row);
@@ -509,7 +496,7 @@ export default function SeriesBuilder({ current, adjacents }: SeriesBuilderProps
       for (const col of selectedColumns) {
         const t = tableauxMap.get(col.tableauId);
         if (t && r < t.entetes.length) {
-          row.push(String((t.entetes[r] as Json[])[col.colIndex] ?? ""));
+          row.push(String((t.entetes[r] as any[])[col.colIndex] ?? ""));
         } else { row.push(""); }
       }
       newColEntetes.push(row);
@@ -521,7 +508,7 @@ export default function SeriesBuilder({ current, adjacents }: SeriesBuilderProps
       for (const col of selectedColumns) {
         const t = tableauxMap.get(col.tableauId);
         if (t && r < t.donnees.length) {
-          row.push(String((t.donnees[r] as Json[])[col.colIndex] ?? ""));
+          row.push(String((t.donnees[r] as any[])[col.colIndex] ?? ""));
         } else { row.push(""); }
       }
       newColDonnees.push(row);
@@ -594,34 +581,24 @@ export default function SeriesBuilder({ current, adjacents }: SeriesBuilderProps
         const source = adjYear < currentYear ? adjId : current.id;
         const cible = adjYear < currentYear ? current.id : adjId;
 
-        const { data: existing } = await supabase
-          .from("tableaux_liaisons")
-          .select("id")
-          .or(
-            `and(id_tableau_source.eq.${source},id_tableau_cible.eq.${cible}),and(id_tableau_source.eq.${cible},id_tableau_cible.eq.${source})`
-          );
+        const allExistingLiaisons = await liaisonsApi.getAll(0, 99999);
+        const existing = allExistingLiaisons.filter((l: any) =>
+          (l.id_tableau_source === source && l.id_tableau_cible === cible) ||
+          (l.id_tableau_source === cible && l.id_tableau_cible === source)
+        );
 
         let liaisonId: number;
 
         if (existing && existing.length > 0) {
           liaisonId = existing[0].id;
         } else {
-          const { data: newLiaison, error: liaisonErr } = await supabase
-            .from("tableaux_liaisons")
-            .insert({
-              id_tableau_source: source,
-              id_tableau_cible: cible,
-              type_liaison: "serie_temporelle",
-              methode_liaison: "series_builder_thematique",
-              confiance: 100,
-            })
-            .select("id")
-            .single();
-
-          if (liaisonErr) {
-            toast({ title: "Erreur liaison", description: liaisonErr.message, variant: "destructive" });
-            continue;
-          }
+          const newLiaison = await liaisonsApi.create({
+            id_tableau_source: source,
+            id_tableau_cible: cible,
+            type_liaison: "serie_temporelle",
+            methode_liaison: "series_builder_thematique",
+            confiance: 100,
+          });
           liaisonId = newLiaison.id;
         }
 
@@ -629,20 +606,13 @@ export default function SeriesBuilder({ current, adjacents }: SeriesBuilderProps
           ? `existing,${selectedColumns.map((c) => `${c.tableauCode}:${c.colIndex}`).join(",")}`
           : selectedColumns.map((c) => `${c.tableauCode}:${c.colIndex}`).join(",");
 
-        const { error: fusionErr } = await supabase.from("tableaux_fusion").upsert(
-          {
-            id_liaison: liaisonId,
-            strategie: "extension_horizontale",
-            entetes_fusionnees: finalEntetes as unknown as Json,
-            donnees_fusionnees: finalDonnees as unknown as Json,
-            colonne_selectionnee: allColDesc,
-          },
-          { onConflict: "id_liaison" }
-        );
-
-        if (fusionErr) {
-          toast({ title: "Erreur fusion", description: fusionErr.message, variant: "destructive" });
-        }
+        await fusionApi.upsert({
+          id_liaison: liaisonId,
+          strategie: "extension_horizontale",
+          entetes_fusionnees: finalEntetes,
+          donnees_fusionnees: finalDonnees,
+          colonne_selectionnee: allColDesc,
+        });
       }
 
       toast({

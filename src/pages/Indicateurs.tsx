@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { views, tableauxIndices } from '@/lib/api';
 import { normalizeThematiqueName } from '@/lib/thematique-utils';
 import { cleanIndicateurTitle, extractIndiceFromTitle, normalizeForComparison, normalizeCode, generateGroupKey } from '@/lib/indicateur-utils';
 import { getThematiqueBadgeColor } from '@/lib/thematique-icons';
@@ -37,23 +37,32 @@ const Indicateurs = () => {
 
   const fetchIndicateurs = async () => {
     setLoading(true);
-    // Step 1: Load main data first (fastest)
-    const fetchAll = async () => { const rows: Indicateur[] = []; let from = 0; while (true) { const { data, error } = await supabase.from('v_tableaux_complets').select('id, code, titre_fr, annuaire_annee, thematique_nom').order('id', { ascending: true }).range(from, from + 999); if (error || !data || data.length === 0) break; rows.push(...(data as Indicateur[])); if (data.length < 1000) break; from += 1000; } return rows; };
-    const allTableaux = await fetchAll();
-    if (!allTableaux || allTableaux.length === 0) { setLoading(false); return; }
+    try {
+      // Step 1: Load main data first (fastest)
+      const fetchAll = async () => { const rows: Indicateur[] = []; let offset = 0; while (true) { const data = await views.tableauxComplets({ select: 'id,code,titre_fr,annuaire_annee,thematique_nom', order_by: 'id', order_dir: 'ASC', from: offset, to: offset + 999 }); if (!data || data.length === 0) break; rows.push(...(data as Indicateur[])); if (data.length < 1000) break; offset += 1000; } return rows; };
+      const allTableaux = await fetchAll();
+      if (!allTableaux || allTableaux.length === 0) { setLoading(false); return; }
 
-    // Show data immediately without series/indices info
-    const quickProcessed: IndicateurDisplay[] = allTableaux.map((ind) => ({ id: ind.id, code: ind.code, titreClean: cleanIndicateurTitle(ind.titre_fr, { removeIndices: true }), titreOriginal: ind.titre_fr, annuaireAnnee: ind.annuaire_annee, thematiqueClean: normalizeThematiqueName(ind.thematique_nom), thematiqueOriginal: ind.thematique_nom || 'Non classé', hasSerie: false, indiceInTitre: extractIndiceFromTitle(ind.titre_fr), significationIndice: null }));
-    quickProcessed.sort((a, b) => { const t = a.titreClean.localeCompare(b.titreClean); return t !== 0 ? t : b.annuaireAnnee.localeCompare(a.annuaireAnnee); });
-    setIndicateurs(quickProcessed);
-    setLoading(false);
+      // Show data immediately without series/indices info
+      const quickProcessed: IndicateurDisplay[] = allTableaux.map((ind) => ({ id: ind.id, code: ind.code, titreClean: cleanIndicateurTitle(ind.titre_fr, { removeIndices: true }), titreOriginal: ind.titre_fr, annuaireAnnee: ind.annuaire_annee, thematiqueClean: normalizeThematiqueName(ind.thematique_nom), thematiqueOriginal: ind.thematique_nom || 'Non classé', hasSerie: false, indiceInTitre: extractIndiceFromTitle(ind.titre_fr), significationIndice: null }));
+      quickProcessed.sort((a, b) => { const t = a.titreClean.localeCompare(b.titreClean); return t !== 0 ? t : b.annuaireAnnee.localeCompare(a.annuaireAnnee); });
+      setIndicateurs(quickProcessed);
+      setLoading(false);
 
-    // Step 2: Enrich with series/indices in background
-    const [seriesRes, indicesRes] = await Promise.all([supabase.from('v_series_temporelles').select('source_id, cible_id'), supabase.from('tableaux_indices').select('id_tableau, code_indice, signification_fr')]);
-    const linkedIds = new Set<number>(); (seriesRes.data || []).forEach((l: any) => { if (typeof l.source_id === 'number') linkedIds.add(l.source_id); if (typeof l.cible_id === 'number') linkedIds.add(l.cible_id); });
-    const indicesMap = new Map<string, string>(); (indicesRes.data || []).forEach((idx: IndiceSignification) => { if (idx.signification_fr) indicesMap.set(`${idx.id_tableau}|${idx.code_indice}`, idx.signification_fr); });
-    // Update with enriched data
-    setIndicateurs(prev => prev.map(ind => ({ ...ind, hasSerie: linkedIds.has(ind.id), significationIndice: ind.indiceInTitre ? (indicesMap.get(`${ind.id}|${ind.indiceInTitre}`) || null) : null })));
+      // Step 2: Enrich with series/indices in background
+      let seriesData: any[] = [];
+      let indicesData: IndiceSignification[] = [];
+      try {
+        [seriesData, indicesData] = await Promise.all([views.seriesTemporelles(0, 99999), tableauxIndices.getAll(0, 99999)]);
+      } catch { seriesData = []; indicesData = []; }
+      const linkedIds = new Set<number>(); (seriesData || []).forEach((l: any) => { if (typeof l.source_id === 'number') linkedIds.add(l.source_id); if (typeof l.cible_id === 'number') linkedIds.add(l.cible_id); });
+      const indicesMap = new Map<string, string>(); (indicesData || []).forEach((idx: IndiceSignification) => { if (idx.signification_fr) indicesMap.set(`${idx.id_tableau}|${idx.code_indice}`, idx.signification_fr); });
+      // Update with enriched data
+      setIndicateurs(prev => prev.map(ind => ({ ...ind, hasSerie: linkedIds.has(ind.id), significationIndice: ind.indiceInTitre ? (indicesMap.get(`${ind.id}|${ind.indiceInTitre}`) || null) : null })));
+    } catch {
+      setIndicateurs([]);
+      setLoading(false);
+    }
   };
 
   const annuairesDisponibles = useMemo(() => { let f = indicateurs; if (selectedThematique !== 'tous') f = f.filter(i => i.thematiqueClean === selectedThematique); return Array.from(new Set(f.map(i => i.annuaireAnnee))).sort((a, b) => b.localeCompare(a)); }, [indicateurs, selectedThematique]);

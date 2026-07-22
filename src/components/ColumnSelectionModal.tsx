@@ -4,12 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Columns, Check, MoveRight, GripVertical, X, ArrowRight, Info } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { tableauxData, fusion as fusionApi } from '@/lib/api';
 import { toast } from 'sonner';
-import type { Json } from '@/integrations/supabase/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-interface IndicateurData { id: number; entetes: Json[][]; donnees: Json[][]; }
+interface IndicateurData { id: number; entetes: any[][]; donnees: any[][]; }
 interface ColumnInfo { index: number; name: string; source: 'source' | 'cible'; sourceAnnee: string; originalIndex: number; }
 interface ColumnSelectionModalProps { open: boolean; onOpenChange: (open: boolean) => void; liaisonId: number; sourceId: number; cibleId: number; sourceAnnee: string; cibleAnnee: string; onSuccess: () => void; }
 
@@ -24,16 +23,20 @@ export const ColumnSelectionModal = ({ open, onOpenChange, liaisonId, sourceId, 
 
   const loadData = async () => {
     setLoading(true); setSelectedColumns([]);
-    const [sourceRes, cibleRes] = await Promise.all([
-      supabase.from('tableaux_data').select('*').eq('id_tableau', sourceId).maybeSingle(),
-      supabase.from('tableaux_data').select('*').eq('id_tableau', cibleId).maybeSingle()
-    ]);
-    if (sourceRes.data) setSourceData({ id: sourceRes.data.id, entetes: sourceRes.data.entetes as Json[][], donnees: sourceRes.data.donnees as Json[][] });
-    if (cibleRes.data) setCibleData({ id: cibleRes.data.id, entetes: cibleRes.data.entetes as Json[][], donnees: cibleRes.data.donnees as Json[][] });
+    try {
+      const [sourceRes, cibleRes] = await Promise.all([
+        tableauxData.getByTableau(sourceId),
+        tableauxData.getByTableau(cibleId)
+      ]);
+      if (sourceRes) setSourceData({ id: sourceRes.id, entetes: sourceRes.entetes as any[][], donnees: sourceRes.donnees as any[][] });
+      if (cibleRes) setCibleData({ id: cibleRes.id, entetes: cibleRes.entetes as any[][], donnees: cibleRes.donnees as any[][] });
+    } catch (err: any) {
+      toast.error('Erreur lors du chargement', { description: err.message });
+    }
     setLoading(false);
   };
 
-  const buildColumnName = (entetes: Json[][], colIndex: number): string => {
+  const buildColumnName = (entetes: any[][], colIndex: number): string => {
     if (!entetes || entetes.length === 0) return `Colonne ${colIndex + 1}`;
     if (entetes.length === 1) { const cell = entetes[0]?.[colIndex]; return String(cell || `Colonne ${colIndex + 1}`); }
     const parts: string[] = [];
@@ -68,11 +71,11 @@ export const ColumnSelectionModal = ({ open, onOpenChange, liaisonId, sourceId, 
     }
   };
 
-  const buildFusedTable = (): { entetes: Json[][]; donnees: Json[][] } => {
+  const buildFusedTable = (): { entetes: any[][]; donnees: any[][] } => {
     if (selectedColumns.length === 0) return { entetes: [], donnees: [] };
     const maxRows = Math.max(sourceData?.donnees?.length || 0, cibleData?.donnees?.length || 0);
-    const newEntetes: Json[][] = [selectedColumns.map(col => col.name)];
-    const newDonnees: Json[][] = [];
+    const newEntetes: any[][] = [selectedColumns.map(col => col.name)];
+    const newDonnees: any[][] = [];
     for (let r = 0; r < maxRows; r++) { newDonnees.push(selectedColumns.map(col => { const data = col.source === 'source' ? sourceData : cibleData; return data?.donnees?.[r]?.[col.originalIndex] ?? ''; })); }
     return { entetes: newEntetes, donnees: newDonnees };
   };
@@ -82,16 +85,14 @@ export const ColumnSelectionModal = ({ open, onOpenChange, liaisonId, sourceId, 
     setSaving(true);
     const fusion = buildFusedTable();
     const colonnesSelectionnees = selectedColumns.map(c => ({ source: c.source, originalIndex: c.originalIndex, name: c.name, annee: c.sourceAnnee }));
-    const { error } = await supabase.from('tableaux_fusion').insert({ id_liaison: liaisonId, strategie: 'colonnes_selectionnees', colonne_selectionnee: JSON.stringify(colonnesSelectionnees), donnees_fusionnees: fusion.donnees, entetes_fusionnees: fusion.entetes });
-    setSaving(false);
-    if (error) {
-      if (error.code === '23505') {
-        const { error: updateError } = await supabase.from('tableaux_fusion').update({ strategie: 'colonnes_selectionnees', colonne_selectionnee: JSON.stringify(colonnesSelectionnees), donnees_fusionnees: fusion.donnees, entetes_fusionnees: fusion.entetes }).eq('id_liaison', liaisonId);
-        if (updateError) { toast.error('Erreur lors de la mise à jour', { description: updateError.message }); return; }
-      } else { toast.error('Erreur lors de la sauvegarde', { description: error.message }); return; }
+    try {
+      await fusionApi.upsert({ id_liaison: liaisonId, strategie: 'colonnes_selectionnees', colonne_selectionnee: JSON.stringify(colonnesSelectionnees), donnees_fusionnees: fusion.donnees, entetes_fusionnees: fusion.entetes });
+      toast.success('Tableau fusionné créé', { description: `${selectedColumns.length} colonnes sélectionnées` });
+      onOpenChange(false); onSuccess();
+    } catch (err: any) {
+      toast.error('Erreur lors de la sauvegarde', { description: err.message });
     }
-    toast.success('Tableau fusionné créé', { description: `${selectedColumns.length} colonnes sélectionnées` });
-    onOpenChange(false); onSuccess();
+    setSaving(false);
   };
 
   return (

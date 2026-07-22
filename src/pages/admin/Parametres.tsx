@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { auth } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -47,14 +47,13 @@ const Parametres = () => {
     e.preventDefault();
     if (!displayName.trim()) { toast.error('Le nom ne peut pas être vide'); return; }
     setSavingName(true);
-    const { error } = await supabase.auth.updateUser({ data: { display_name: displayName.trim() } });
-    if (!error) {
-      // Refresh session to update user_metadata everywhere
-      await supabase.auth.refreshSession();
+    try {
+      await auth.updateProfile(displayName.trim());
+      toast.success('Nom mis à jour avec succès');
+    } catch (error: any) {
+      toast.error('Erreur', { description: error.message });
     }
     setSavingName(false);
-    if (error) toast.error('Erreur', { description: error.message });
-    else toast.success('Nom mis à jour avec succès');
   };
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
@@ -64,21 +63,14 @@ const Parametres = () => {
     if (newPassword.length < 6) { toast.error('Le mot de passe doit contenir au moins 6 caractères'); return; }
     if (newPassword !== confirmPassword) { toast.error('Les mots de passe ne correspondent pas'); return; }
     setSavingPassword(true);
-    // Verify current password by trying to sign in
-    const { error: verifyError } = await supabase.auth.signInWithPassword({
-      email: user?.email || '',
-      password: currentPassword,
-    });
-    if (verifyError) {
-      setSavingPassword(false);
-      toast.error('Ancien mot de passe incorrect');
-      return;
+    try {
+      await auth.updatePassword(currentPassword, newPassword);
+      toast.success('Mot de passe mis à jour avec succès');
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+    } catch (error: any) {
+      toast.error(error.message || 'Erreur lors de la mise à jour');
     }
-    // Update to new password
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
     setSavingPassword(false);
-    if (error) toast.error('Erreur', { description: error.message });
-    else { toast.success('Mot de passe mis à jour avec succès'); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }
   };
 
   return (

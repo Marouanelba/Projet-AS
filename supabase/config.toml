@@ -1,7 +1,0 @@
-project_id = "kqlqhwkygkbghkwextoo"
-
-[functions.import-data]
-verify_jwt = false
-
-[functions.clear-tables]
-verify_jwt = false

@@ -31,11 +31,10 @@ import {
 } from "recharts";
 import { BarChart3, LineChart as LineChartIcon, PieChart as PieChartIcon, AreaChart as AreaChartIcon, Download, ImageIcon, Settings2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import type { Json } from "@/integrations/supabase/types";
 
 interface ChartBuilderProps {
-  entetes: Json[][];
-  donnees: Json[][];
+  entetes: any[][];
+  donnees: any[][];
 }
 
 type ChartType = "bar" | "line" | "pie" | "area";

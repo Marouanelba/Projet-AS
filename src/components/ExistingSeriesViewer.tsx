@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { rpc, views, tableauxData, liaisons as liaisonsApi, fusion as fusionApi } from '@/lib/api';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,12 +11,11 @@ import { Loader2, Eye, Layers, BarChart3, Table2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import DataTableWithExport from "@/components/DataTableWithExport";
 import ChartBuilder from "@/components/ChartBuilder";
-import type { Json } from "@/integrations/supabase/types";
 
 interface SerieChain {
   id: string; // unique key for this chain
   tableaux: SerieTableau[];
-  fusionData: { entetes: Json[][]; donnees: Json[][]; source: string } | null;
+  fusionData: { entetes: any[][]; donnees: any[][]; source: string } | null;
 }
 
 interface SerieTableau {
@@ -42,107 +41,105 @@ export default function ExistingSeriesViewer({ tableauId }: ExistingSeriesViewer
   const loadSeries = async () => {
     setLoading(true);
 
-    // Use the server-side recursive function for reliable full chain discovery
-    const { data: serieData, error } = await supabase
-      .rpc("get_serie_temporelle", { p_tableau_id: tableauId });
+    try {
+      // Use the server-side recursive function for reliable full chain discovery
+      const serieData = await rpc.getSerieTemporelle(tableauId);
 
-    if (error || !serieData || serieData.length <= 1) {
-      setSeries([]);
-      setLoading(false);
-      return;
-    }
-
-    const chainIds = (serieData as any[]).map((r: any) => r.id as number);
-
-    // Batch fetch metadata and raw data for the entire chain
-    const [{ data: metaRows }, { data: dataRows }] = await Promise.all([
-      supabase
-        .from("v_tableaux_complets")
-        .select("id, code, titre_fr, annuaire_annee")
-        .in("id", chainIds),
-      supabase
-        .from("tableaux_data")
-        .select("id_tableau, entetes, donnees")
-        .in("id_tableau", chainIds),
-    ]);
-
-    const tableaux: SerieTableau[] = (metaRows || [])
-      .map((r: any) => ({
-        id: r.id,
-        code: r.code,
-        titre_fr: r.titre_fr,
-        annee: r.annuaire_annee,
-      }))
-      .sort((a: SerieTableau, b: SerieTableau) => b.annee.localeCompare(a.annee));
-
-    // Try to load saved fusion data first
-    let fusionData = await loadSavedFusion(chainIds);
-    
-    // Fallback to dynamic computation if no saved fusion
-    if (!fusionData) {
-      // Build tableaux with data for computeFusion
-      const dataMap = new Map<number, { entetes: Json[][]; donnees: Json[][] }>();
-      if (dataRows) {
-        dataRows.forEach((d: any) => dataMap.set(d.id_tableau, { entetes: d.entetes, donnees: d.donnees }));
+      if (!serieData || serieData.length <= 1) {
+        setSeries([]);
+        setLoading(false);
+        return;
       }
-      fusionData = await computeFusionFromData(tableaux, dataMap);
+
+      const chainIds = (serieData as any[]).map((r: any) => r.id as number);
+
+      // Batch fetch metadata and raw data for the entire chain
+      const [metaRows, dataRows] = await Promise.all([
+        views.tableauxComplets({ from: 0, to: 99999 }).then(rows => rows.filter((r: any) => chainIds.includes(r.id))),
+        tableauxData.getByTableaux(chainIds),
+      ]);
+
+      const tableaux: SerieTableau[] = (metaRows || [])
+        .map((r: any) => ({
+          id: r.id,
+          code: r.code,
+          titre_fr: r.titre_fr,
+          annee: r.annuaire_annee,
+        }))
+        .sort((a: SerieTableau, b: SerieTableau) => b.annee.localeCompare(a.annee));
+
+      // Try to load saved fusion data first
+      let fusionData = await loadSavedFusion(chainIds);
+      
+      // Fallback to dynamic computation if no saved fusion
+      if (!fusionData) {
+        // Build tableaux with data for computeFusion
+        const dataMap = new Map<number, { entetes: any[][]; donnees: any[][] }>();
+        if (dataRows) {
+          dataRows.forEach((d: any) => dataMap.set(d.id_tableau, { entetes: d.entetes, donnees: d.donnees }));
+        }
+        fusionData = await computeFusionFromData(tableaux, dataMap);
+      }
+
+      const chain: SerieChain = {
+        id: `chain-${tableauId}`,
+        tableaux,
+        fusionData,
+      };
+
+      setSeries([chain]);
+      setSelectedSerieIdx(0);
+    } catch (e) {
+      console.error("Error loading series:", e);
+      setSeries([]);
     }
-
-    const chain: SerieChain = {
-      id: `chain-${tableauId}`,
-      tableaux,
-      fusionData,
-    };
-
-    setSeries([chain]);
-    setSelectedSerieIdx(0);
     setLoading(false);
   };
 
   const loadSavedFusion = async (
     chainIds: number[]
-  ): Promise<{ entetes: Json[][]; donnees: Json[][]; source: string } | null> => {
-    // Find liaisons between chain members
-    const { data: liaisons } = await supabase
-      .from("tableaux_liaisons")
-      .select("id")
-      .or(
-        chainIds.map(id => `id_tableau_source.eq.${id}`).join(",") + "," +
-        chainIds.map(id => `id_tableau_cible.eq.${id}`).join(",")
+  ): Promise<{ entetes: any[][]; donnees: any[][]; source: string } | null> => {
+    try {
+      // Find liaisons between chain members
+      const allLiaisons = await liaisonsApi.getAll(0, 99999);
+      const relevantLiaisons = allLiaisons.filter((l: any) =>
+        chainIds.includes(l.id_tableau_source) || chainIds.includes(l.id_tableau_cible)
       );
 
-    if (!liaisons || liaisons.length === 0) return null;
+      if (relevantLiaisons.length === 0) return null;
 
-    // Find fusion data for these liaisons
-    const liaisonIds = liaisons.map(l => l.id);
-    const { data: fusions } = await supabase
-      .from("tableaux_fusion")
-      .select("*")
-      .in("id_liaison", liaisonIds)
-      .order("created_at", { ascending: false })
-      .limit(1);
+      // Find fusion data for these liaisons
+      const liaisonIds = relevantLiaisons.map((l: any) => l.id);
+      const allFusions = await fusionApi.getAll(0, 99999);
+      const relevantFusions = allFusions
+        .filter((f: any) => liaisonIds.includes(f.id_liaison))
+        .sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
 
-    if (!fusions || fusions.length === 0) return null;
+      if (relevantFusions.length === 0) return null;
 
-    const fusion = fusions[0];
-    return {
-      entetes: fusion.entetes_fusionnees as Json[][],
-      donnees: fusion.donnees_fusionnees as Json[][],
-      source: `Fusion sauvegardée (${fusion.strategie})`,
-    };
+      const fusionRecord = relevantFusions[0];
+      return {
+        entetes: fusionRecord.entetes_fusionnees as any[][],
+        donnees: fusionRecord.donnees_fusionnees as any[][],
+        source: `Fusion sauvegardée (${fusionRecord.strategie})`,
+      };
+    } catch (e) {
+      console.error("Error loading saved fusion:", e);
+      return null;
+    }
   };
 
   const computeFusionFromData = async (
     tableaux: SerieTableau[],
-    dataMap: Map<number, { entetes: Json[][]; donnees: Json[][] }>
-  ): Promise<{ entetes: Json[][]; donnees: Json[][]; source: string } | null> => {
+    dataMap: Map<number, { entetes: any[][]; donnees: any[][] }>
+  ): Promise<{ entetes: any[][]; donnees: any[][]; source: string } | null> => {
     if (tableaux.length === 0) return null;
 
     const withData = tableaux
       .map((t) => ({ ...t, ...(dataMap.get(t.id) || {}) }))
       .filter((t) => (t as any).entetes && (t as any).donnees) as (SerieTableau & {
-      entetes: Json[][];
-      donnees: Json[][];
+      entetes: any[][];
+      donnees: any[][];
     })[];
 
 
@@ -159,9 +156,9 @@ export default function ExistingSeriesViewer({ tableauId }: ExistingSeriesViewer
     withData.sort((a, b) => b.annee.localeCompare(a.annee));
 
     // Dynamic column fusion (same logic as IndicateurPublicDetail)
-    const columnsMap = new Map<string, { headerCells: Json[]; dataColumn: Json[] }>();
-    let firstTextColumn: { header: Json[]; data: Json[] } | null = null;
-    let lastTextColumn: { header: Json[]; data: Json[] } | null = null;
+    const columnsMap = new Map<string, { headerCells: any[]; dataColumn: any[] }>();
+    let firstTextColumn: { header: any[]; data: any[] } | null = null;
+    let lastTextColumn: { header: any[]; data: any[] } | null = null;
 
     for (const asData of withData) {
       const lastHeaderRow = asData.entetes[asData.entetes.length - 1];
@@ -196,11 +193,11 @@ export default function ExistingSeriesViewer({ tableauId }: ExistingSeriesViewer
     const nbHeaderRows = withData[0].entetes.length;
     const nbDataRows = withData[0].donnees.length;
 
-    const fusionEntetes: Json[][] = [];
-    const fusionDonnees: Json[][] = [];
+    const fusionEntetes: any[][] = [];
+    const fusionDonnees: any[][] = [];
 
     for (let rowIdx = 0; rowIdx < nbHeaderRows; rowIdx++) {
-      const row: Json[] = [];
+      const row: any[] = [];
       if (firstTextColumn) row.push(firstTextColumn.header[rowIdx]);
       for (const year of sortedYears) row.push(columnsMap.get(year)!.headerCells[rowIdx]);
       if (lastTextColumn && firstTextColumn !== lastTextColumn)
@@ -209,7 +206,7 @@ export default function ExistingSeriesViewer({ tableauId }: ExistingSeriesViewer
     }
 
     for (let rowIdx = 0; rowIdx < nbDataRows; rowIdx++) {
-      const row: Json[] = [];
+      const row: any[] = [];
       if (firstTextColumn) row.push(firstTextColumn.data[rowIdx]);
       for (const year of sortedYears) row.push(columnsMap.get(year)!.dataColumn[rowIdx]);
       if (lastTextColumn && firstTextColumn !== lastTextColumn)

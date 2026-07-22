@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { views, tableaux as tableauxApi, tableauxIndices, tableauxData, annuaires as annuairesApi, ruptures as rupturesApi, fusion as fusionApi, liaisons as liaisonsApi, rpc } from '@/lib/api';
 import { normalizeThematiqueName } from '@/lib/thematique-utils';
 import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
@@ -173,18 +173,17 @@ const Liaisons = () => {
   }, []);
 
   // Fetch all rows with pagination (bypasses 1000-row limit)
-  const fetchAllFromQuery = async <T,>(buildQuery: (offset: number, limit: number) => any): Promise<T[]> => {
+  const fetchAllPaginated = async <T,>(fetchFn: (from: number, to: number) => Promise<T[]>): Promise<T[]> => {
     const pageSize = 1000;
     let allData: T[] = [];
     let offset = 0;
     let hasMore = true;
-    
     while (hasMore) {
-      const { data, error } = await buildQuery(offset, offset + pageSize - 1);
-      if (error || !data || data.length === 0) {
+      const data = await fetchFn(offset, offset + pageSize - 1);
+      if (!data || data.length === 0) {
         hasMore = false;
       } else {
-        allData = [...allData, ...(data as T[])];
+        allData = [...allData, ...data];
         offset += pageSize;
         if (data.length < pageSize) hasMore = false;
       }
@@ -195,21 +194,25 @@ const Liaisons = () => {
   const fetchData = async () => {
     setLoading(true);
     
-    const [orphelins, seriesData, indicateursData, annuairesData, rupturesData, fusionData] = await Promise.all([
-      fetchAllFromQuery<Orphelin>((o, l) => supabase.from('v_tableaux_sans_liaison').select('*').range(o, l)),
-      fetchAllFromQuery<SerieTemporelle>((o, l) => supabase.from('v_series_temporelles').select('*').range(o, l)),
-      fetchAllFromQuery<Indicateur>((o, l) => supabase.from('v_tableaux_complets').select('*').range(o, l)),
-      fetchAllFromQuery<Annuaire>((o, l) => supabase.from('annuaires').select('*').order('annee', { ascending: false }).range(o, l)),
-      fetchAllFromQuery<Rupture>((o, l) => supabase.from('tableaux_ruptures').select('*').range(o, l)),
-      fetchAllFromQuery<{ id_liaison: number }>((o, l) => supabase.from('tableaux_fusion').select('id_liaison').range(o, l))
-    ]);
+    try {
+      const [orphelins, seriesData, indicateursData, annuairesData, rupturesData, fusionData] = await Promise.all([
+        fetchAllPaginated<Orphelin>((o, l) => views.tableauxSansLiaison(o, l)),
+        fetchAllPaginated<SerieTemporelle>((o, l) => views.seriesTemporelles(o, l)),
+        fetchAllPaginated<Indicateur>((o, l) => views.tableauxComplets({ from: o, to: l })),
+        annuairesApi.getAll('desc'),
+        fetchAllPaginated<Rupture>((o, l) => rupturesApi.getAll(o, l)),
+        fetchAllPaginated<{ id_liaison: number }>((o, l) => fusionApi.getAll(o, l))
+      ]);
 
-    setAllOrphelins(orphelins);
-    setSeries(seriesData);
-    setIndicateurs(indicateursData);
-    setAnnuaires(annuairesData);
-    setRuptures(rupturesData);
-    setFusionConfigured(new Set(fusionData.map(f => f.id_liaison)));
+      setAllOrphelins(orphelins);
+      setSeries(seriesData);
+      setIndicateurs(indicateursData);
+      setAnnuaires(annuairesData);
+      setRuptures(rupturesData);
+      setFusionConfigured(new Set(fusionData.map(f => f.id_liaison)));
+    } catch (err) {
+      console.error('Erreur lors du chargement des données:', err);
+    }
     
     setLoading(false);
   };
@@ -224,18 +227,22 @@ const Liaisons = () => {
   
   // Charger les détails d'un tableau
   const fetchTableauDetail = async (tableauId: number): Promise<IndicateurDetail | null> => {
-    const [indRes, indicesRes] = await Promise.all([
-      supabase.from('tableaux').select('id, code, titre_fr, notes_fr, source_fr, unite_fr').eq('id', tableauId).single(),
-      supabase.from('tableaux_indices').select('id, code_indice, signification_fr').eq('id_tableau', tableauId)
-    ]);
-    
-    if (indRes.data) {
-      return {
-        ...indRes.data,
-        indices: indicesRes.data || []
-      };
+    try {
+      const [indData, indicesData] = await Promise.all([
+        tableauxApi.getById(tableauId),
+        tableauxIndices.getByTableau(tableauId)
+      ]);
+      
+      if (indData) {
+        return {
+          ...indData,
+          indices: indicesData || []
+        };
+      }
+      return null;
+    } catch {
+      return null;
     }
-    return null;
   };
   
   // Charger les suggestions basées sur la similarité entre 2 annuaires avec filtrage par thématique
@@ -263,46 +270,47 @@ const Liaisons = () => {
     const allSuggestions: Suggestion[] = [];
     
     for (const indicateur of indicateursSource) {
-      const { data } = await supabase.rpc('find_similar_tableaux', {
-        p_tableau_id: indicateur.id,
-        p_seuil: 0.4
-      });
+      try {
+        const data = await rpc.findSimilarTableaux(indicateur.id, 0.4);
       
-      if (data && data.length > 0) {
-        // Filtrer pour ne garder que les indicateurs de l'annuaire cible ET de la même thématique nettoyée
-        const matchesInCible = data.filter((d: { id: number; annee: string; thematique: string }) => 
-          d.annee === suggestionCibleAnnuaire && 
-          cleanThematiqueName(indicateurs.find(ind => ind.id === d.id)?.thematique_nom || '') === suggestionThematique
-        );
+        if (data && data.length > 0) {
+          // Filtrer pour ne garder que les indicateurs de l'annuaire cible ET de la même thématique nettoyée
+          const matchesInCible = data.filter((d: { id: number; annee: string; thematique: string }) => 
+            d.annee === suggestionCibleAnnuaire && 
+            cleanThematiqueName(indicateurs.find(ind => ind.id === d.id)?.thematique_nom || '') === suggestionThematique
+          );
         
-        if (matchesInCible.length > 0) {
-          const best = matchesInCible[0];
+          if (matchesInCible.length > 0) {
+            const best = matchesInCible[0];
           
-          // Vérifier si cette liaison spécifique existe déjà
-          if (liaisonExists(indicateur.id, best.id)) {
-            continue; // Passer à l'indicateur suivant si déjà lié
+            // Vérifier si cette liaison spécifique existe déjà
+            if (liaisonExists(indicateur.id, best.id)) {
+              continue; // Passer à l'indicateur suivant si déjà lié
+            }
+          
+            // Charger les détails des deux indicateurs
+            const [sourceDetailData, cibleDetailData] = await Promise.all([
+              fetchTableauDetail(indicateur.id),
+              fetchTableauDetail(best.id)
+            ]);
+          
+            allSuggestions.push({
+              source_id: indicateur.id,
+              source_code: indicateur.code,
+              source_titre: indicateur.titre_fr,
+              source_annee: indicateur.annuaire_annee,
+              cible_id: best.id,
+              cible_code: best.code,
+              cible_titre: best.titre_fr,
+              cible_annee: best.annee,
+              similarite: best.similarite,
+              source_detail: sourceDetailData,
+              cible_detail: cibleDetailData
+            });
           }
-          
-          // Charger les détails des deux indicateurs
-          const [sourceDetailData, cibleDetailData] = await Promise.all([
-            fetchTableauDetail(indicateur.id),
-            fetchTableauDetail(best.id)
-          ]);
-          
-          allSuggestions.push({
-            source_id: indicateur.id,
-            source_code: indicateur.code,
-            source_titre: indicateur.titre_fr,
-            source_annee: indicateur.annuaire_annee,
-            cible_id: best.id,
-            cible_code: best.code,
-            cible_titre: best.titre_fr,
-            cible_annee: best.annee,
-            similarite: best.similarite,
-            source_detail: sourceDetailData,
-            cible_detail: cibleDetailData
-          });
         }
+      } catch {
+        // Skip this indicateur on error
       }
     }
     
@@ -542,37 +550,34 @@ const Liaisons = () => {
       return;
     }
     
-    const { error } = await supabase.from('tableaux_ruptures').insert({
-      id_tableau: indicateurId,
-      annee_rupture: anneeRupture,
-      direction: direction,
-      notes: `Rupture marquée manuellement - pas de continuité vers ${anneeRupture}`
-    });
-    
-    if (error) {
-      if (error.code === '23505') {
+    try {
+      await rupturesApi.create({
+        id_tableau: indicateurId,
+        annee_rupture: anneeRupture,
+        direction: direction,
+        notes: `Rupture marquée manuellement - pas de continuité vers ${anneeRupture}`
+      });
+      
+      toast.success(`Indicateur marqué comme interrompu vers ${anneeRupture}`);
+      fetchData();
+    } catch (err: any) {
+      if (err.message?.includes('23505') || err.message?.includes('existe déjà')) {
         toast.error('Cette rupture existe déjà');
       } else {
-        toast.error('Erreur lors du marquage', { description: error.message });
+        toast.error('Erreur lors du marquage', { description: err.message });
       }
-      return;
     }
-    
-    toast.success(`Indicateur marqué comme interrompu vers ${anneeRupture}`);
-    fetchData();
   };
   
   // Supprimer une rupture
   const handleDeleteRupture = async (ruptureId: number) => {
-    const { error } = await supabase.from('tableaux_ruptures').delete().eq('id', ruptureId);
-    
-    if (error) {
-      toast.error('Erreur lors de la suppression', { description: error.message });
-      return;
+    try {
+      await rupturesApi.delete(ruptureId);
+      toast.success('Rupture supprimée');
+      fetchData();
+    } catch (err: any) {
+      toast.error('Erreur lors de la suppression', { description: err.message });
     }
-    
-    toast.success('Rupture supprimée');
-    fetchData();
   };
   
   // Réinitialiser source/cible IDs quand thématique change (pour créer liaison)
@@ -624,125 +629,124 @@ const Liaisons = () => {
 
     setCreating(true);
 
-    const { data, error } = await supabase.from('tableaux_liaisons').insert({
-      id_tableau_source: parseInt(sourceId),
-      id_tableau_cible: parseInt(cibleId),
-      type_liaison: typeLiaison,
-      methode_liaison: 'manuelle',
-      confiance: 100
-    }).select('id').single();
+    try {
+      const data = await liaisonsApi.create({
+        id_tableau_source: parseInt(sourceId),
+        id_tableau_cible: parseInt(cibleId),
+        type_liaison: typeLiaison,
+        methode_liaison: 'manuelle',
+        confiance: 100
+      });
 
-    setCreating(false);
+      setCreating(false);
 
-    if (error) {
-      if (error.code === '23505') {
+      // Trouver les années des indicateurs pour le modal
+      const sourceInd = indicateurs.find(i => i.id === parseInt(sourceId));
+      const cibleInd = indicateurs.find(i => i.id === parseInt(cibleId));
+
+      // Pour "fusionne", ouvrir le modal de sélection de colonnes
+      // Pour "extension_horizontale", ouvrir le modal d'extension horizontale
+      // Pour "remplace", pas de modal - on prend simplement les données les plus récentes
+      if (typeLiaison === 'fusionne') {
+        setPendingLiaison({
+          liaisonId: data.id,
+          sourceId: parseInt(sourceId),
+          cibleId: parseInt(cibleId),
+          sourceAnnee: sourceInd?.annuaire_annee || '',
+          cibleAnnee: cibleInd?.annuaire_annee || '',
+          typeLiaison: typeLiaison
+        });
+        setColumnSelectionModalOpen(true);
+      } else if (typeLiaison === 'extension_horizontale') {
+        setPendingLiaison({
+          liaisonId: data.id,
+          sourceId: parseInt(sourceId),
+          cibleId: parseInt(cibleId),
+          sourceAnnee: sourceInd?.annuaire_annee || '',
+          cibleAnnee: cibleInd?.annuaire_annee || '',
+          typeLiaison: typeLiaison
+        });
+        setHorizontalExtensionModalOpen(true);
+      } else {
+        // Pour "remplace" ou autre, liaison créée directement sans modal
+        setPendingLiaison(null);
+        setFusionModalOpen(false);
+        setColumnSelectionModalOpen(false);
+        setHorizontalExtensionModalOpen(false);
+        toast.success('Liaison créée avec succès');
+      }
+    
+      setSourceId('');
+      setCibleId('');
+      fetchData();
+    } catch (err: any) {
+      setCreating(false);
+      if (err.message?.includes('23505') || err.message?.includes('existe déjà')) {
         toast.error('Cette liaison existe déjà');
       } else {
-        toast.error('Erreur lors de la création', { description: error.message });
+        toast.error('Erreur lors de la création', { description: err.message });
       }
-      return;
     }
-
-    // Trouver les années des indicateurs pour le modal
-    const sourceInd = indicateurs.find(i => i.id === parseInt(sourceId));
-    const cibleInd = indicateurs.find(i => i.id === parseInt(cibleId));
-
-    // Pour "fusionne", ouvrir le modal de sélection de colonnes
-    // Pour "extension_horizontale", ouvrir le modal d'extension horizontale
-    // Pour "remplace", pas de modal - on prend simplement les données les plus récentes
-    if (typeLiaison === 'fusionne') {
-      setPendingLiaison({
-        liaisonId: data.id,
-        sourceId: parseInt(sourceId),
-        cibleId: parseInt(cibleId),
-        sourceAnnee: sourceInd?.annuaire_annee || '',
-        cibleAnnee: cibleInd?.annuaire_annee || '',
-        typeLiaison: typeLiaison
-      });
-      setColumnSelectionModalOpen(true);
-    } else if (typeLiaison === 'extension_horizontale') {
-      setPendingLiaison({
-        liaisonId: data.id,
-        sourceId: parseInt(sourceId),
-        cibleId: parseInt(cibleId),
-        sourceAnnee: sourceInd?.annuaire_annee || '',
-        cibleAnnee: cibleInd?.annuaire_annee || '',
-        typeLiaison: typeLiaison
-      });
-      setHorizontalExtensionModalOpen(true);
-    } else {
-      // Pour "remplace" ou autre, liaison créée directement sans modal
-      setPendingLiaison(null);
-      setFusionModalOpen(false);
-      setColumnSelectionModalOpen(false);
-      setHorizontalExtensionModalOpen(false);
-      toast.success('Liaison créée avec succès');
-    }
-    
-    setSourceId('');
-    setCibleId('');
-    fetchData();
   };
   
   const handleAcceptSuggestion = async (suggestion: Suggestion, suggestionTypeLiaison: string = 'fusionne') => {
     const normalizedType = (suggestionTypeLiaison || 'fusionne').trim().toLowerCase();
 
-    const { data, error } = await supabase.from('tableaux_liaisons').insert({
-      id_tableau_source: suggestion.source_id,
-      id_tableau_cible: suggestion.cible_id,
-      type_liaison: normalizedType,
-      methode_liaison: 'suggestion_ia',
-      confiance: Math.round(suggestion.similarite * 100)
-    }).select('id').single();
+    try {
+      const data = await liaisonsApi.create({
+        id_tableau_source: suggestion.source_id,
+        id_tableau_cible: suggestion.cible_id,
+        type_liaison: normalizedType,
+        methode_liaison: 'suggestion_ia',
+        confiance: Math.round(suggestion.similarite * 100)
+      });
 
-    if (error) {
-      toast.error('Erreur lors de la création', { description: error.message });
-      return;
-    }
-
-    // Ouvrir le modal approprié selon le type de liaison
-    if (normalizedType === 'fusionne') {
-      setPendingLiaison({
-        liaisonId: data.id,
-        sourceId: suggestion.source_id,
-        cibleId: suggestion.cible_id,
-        sourceAnnee: suggestion.source_annee,
-        cibleAnnee: suggestion.cible_annee,
-        typeLiaison: normalizedType,
-      });
-      setColumnSelectionModalOpen(true);
-    } else if (normalizedType === 'extension_horizontale') {
-      setPendingLiaison({
-        liaisonId: data.id,
-        sourceId: suggestion.source_id,
-        cibleId: suggestion.cible_id,
-        sourceAnnee: suggestion.source_annee,
-        cibleAnnee: suggestion.cible_annee,
-        typeLiaison: normalizedType,
-      });
-      setHorizontalExtensionModalOpen(true);
-    } else if (normalizedType === 'remplace') {
-      // Pour "remplace" : pas de configuration, on affiche toujours le tableau le plus récent côté front
-      setPendingLiaison(null);
-      setFusionModalOpen(false);
-      setColumnSelectionModalOpen(false);
-      setHorizontalExtensionModalOpen(false);
-      toast.success('Liaison "remplace" créée');
-    } else {
-      // Autres types : on garde la configuration existante
-      setPendingLiaison({
-        liaisonId: data.id,
-        sourceId: suggestion.source_id,
-        cibleId: suggestion.cible_id,
-        sourceAnnee: suggestion.source_annee,
-        cibleAnnee: suggestion.cible_annee,
-        typeLiaison: normalizedType,
-      });
-      setFusionModalOpen(true);
-    }
+      // Ouvrir le modal approprié selon le type de liaison
+      if (normalizedType === 'fusionne') {
+        setPendingLiaison({
+          liaisonId: data.id,
+          sourceId: suggestion.source_id,
+          cibleId: suggestion.cible_id,
+          sourceAnnee: suggestion.source_annee,
+          cibleAnnee: suggestion.cible_annee,
+          typeLiaison: normalizedType,
+        });
+        setColumnSelectionModalOpen(true);
+      } else if (normalizedType === 'extension_horizontale') {
+        setPendingLiaison({
+          liaisonId: data.id,
+          sourceId: suggestion.source_id,
+          cibleId: suggestion.cible_id,
+          sourceAnnee: suggestion.source_annee,
+          cibleAnnee: suggestion.cible_annee,
+          typeLiaison: normalizedType,
+        });
+        setHorizontalExtensionModalOpen(true);
+      } else if (normalizedType === 'remplace') {
+        // Pour "remplace" : pas de configuration, on affiche toujours le tableau le plus récent côté front
+        setPendingLiaison(null);
+        setFusionModalOpen(false);
+        setColumnSelectionModalOpen(false);
+        setHorizontalExtensionModalOpen(false);
+        toast.success('Liaison "remplace" créée');
+      } else {
+        // Autres types : on garde la configuration existante
+        setPendingLiaison({
+          liaisonId: data.id,
+          sourceId: suggestion.source_id,
+          cibleId: suggestion.cible_id,
+          sourceAnnee: suggestion.source_annee,
+          cibleAnnee: suggestion.cible_annee,
+          typeLiaison: normalizedType,
+        });
+        setFusionModalOpen(true);
+      }
     
-    setSuggestions(prev => prev.filter(s => s.source_id !== suggestion.source_id));
-    fetchData();
+      setSuggestions(prev => prev.filter(s => s.source_id !== suggestion.source_id));
+      fetchData();
+    } catch (err: any) {
+      toast.error('Erreur lors de la création', { description: err.message });
+    }
   };
   
   const handleRejectSuggestion = (suggestion: Suggestion) => {
@@ -751,18 +755,13 @@ const Liaisons = () => {
   };
 
   const handleDeleteLiaison = async (liaisonId: number) => {
-    const { error } = await supabase
-      .from('tableaux_liaisons')
-      .delete()
-      .eq('id', liaisonId);
-
-    if (error) {
-      toast.error('Erreur lors de la suppression', { description: error.message });
-      return;
+    try {
+      await liaisonsApi.delete(liaisonId);
+      toast.success('Liaison supprimée');
+      fetchData();
+    } catch (err: any) {
+      toast.error('Erreur lors de la suppression', { description: err.message });
     }
-
-    toast.success('Liaison supprimée');
-    fetchData();
   };
 
   // Aperçu rapide d'une série
@@ -772,36 +771,36 @@ const Liaisons = () => {
     setPreviewLoading(true);
     setPreviewData(null);
     
-    // Try to load saved fusion first
-    const { data: fusion } = await supabase
-      .from('tableaux_fusion')
-      .select('entetes_fusionnees, donnees_fusionnees, strategie')
-      .eq('id_liaison', s.liaison_id)
-      .maybeSingle();
+    try {
+      // Try to load saved fusion first
+      const fusionData = await fusionApi.getByLiaison(s.liaison_id);
     
-    if (fusion) {
-      setPreviewData({
-        entetes: fusion.entetes_fusionnees as any[][],
-        donnees: fusion.donnees_fusionnees as any[][],
-        source: `Fusion (${fusion.strategie})`
-      });
-      setPreviewLoading(false);
-      return;
+      if (fusionData) {
+        setPreviewData({
+          entetes: fusionData.entetes_fusionnees as any[][],
+          donnees: fusionData.donnees_fusionnees as any[][],
+          source: `Fusion (${fusionData.strategie})`
+        });
+        setPreviewLoading(false);
+        return;
+      }
+    } catch {
+      // No fusion data, continue to fallback
     }
     
-    // Fallback: load raw data from source and cible
-    const { data: cibleData } = await supabase
-      .from('tableaux_data')
-      .select('entetes, donnees')
-      .eq('id_tableau', s.cible_id)
-      .maybeSingle();
+    try {
+      // Fallback: load raw data from source and cible
+      const cibleData = await tableauxData.getByTableau(s.cible_id);
     
-    if (cibleData) {
-      setPreviewData({
-        entetes: cibleData.entetes as any[][],
-        donnees: cibleData.donnees as any[][],
-        source: `Tableau cible (AS ${s.cible_annee})`
-      });
+      if (cibleData) {
+        setPreviewData({
+          entetes: cibleData.entetes as any[][],
+          donnees: cibleData.donnees as any[][],
+          source: `Tableau cible (AS ${s.cible_annee})`
+        });
+      }
+    } catch {
+      // No data available
     }
     setPreviewLoading(false);
   };

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { tableaux as tableauxApi, thematiques as thematiquesApi, annuaires as annuairesApi, tableauxIndices, tableauxData, views, fusion as fusionApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,150 +78,155 @@ const IndicateurDetail = () => {
   const fetchIndicateur = async (indicateurId: number) => {
     setLoading(true);
 
-    const { data: ind } = await supabase
-      .from('tableaux')
-      .select('*')
-      .eq('id', indicateurId)
-      .maybeSingle();
+    try {
+      const ind = await tableauxApi.getById(indicateurId);
 
-    if (!ind) {
-      setLoading(false);
-      return;
-    }
-
-    setIndicateur(ind);
-
-    const [themRes, indicesRes, dataRes] = await Promise.all([
-      supabase.from('thematiques').select('*').eq('id', ind.id_thematique).maybeSingle(),
-      supabase.from('tableaux_indices').select('*').eq('id_tableau', indicateurId),
-      supabase.from('tableaux_data').select('*').eq('id_tableau', indicateurId).maybeSingle()
-    ]);
-
-    let currentAnnee = '';
-    if (themRes.data) {
-      setThematique(themRes.data);
-      const { data: annuaireData } = await supabase
-        .from('annuaires')
-        .select('*')
-        .eq('id', themRes.data.id_annuaire)
-        .maybeSingle();
-      if (annuaireData) {
-        setAnnuaire(annuaireData);
-        currentAnnee = annuaireData.annee;
+      if (!ind) {
+        setLoading(false);
+        return;
       }
+
+      setIndicateur(ind);
+
+      const [themData, indicesData, dataResult] = await Promise.all([
+        thematiquesApi.getById(ind.id_thematique).catch(() => null),
+        tableauxIndices.getByTableau(indicateurId),
+        tableauxData.getByTableau(indicateurId)
+      ]);
+
+      let currentAnnee = '';
+      if (themData) {
+        setThematique(themData);
+        try {
+          const annuaireData = await annuairesApi.getById(themData.id_annuaire);
+          if (annuaireData) {
+            setAnnuaire(annuaireData);
+            currentAnnee = annuaireData.annee;
+          }
+        } catch {
+          // Annuaire non trouvé
+        }
+      }
+
+      setIndices(indicesData || []);
+      setData(dataResult || null);
+
+      // Récupérer la série temporelle pour cet indicateur
+      await fetchSerieTemporelle(indicateurId, dataResult, currentAnnee);
+    } catch {
+      // Indicateur non trouvé
     }
-
-    if (indicesRes.data) setIndices(indicesRes.data);
-    if (dataRes.data) setData(dataRes.data);
-
-    // Récupérer la série temporelle pour cet indicateur
-    await fetchSerieTemporelle(indicateurId, dataRes.data, currentAnnee);
 
     setLoading(false);
   };
 
   // Fonction pour récupérer et parcourir la série temporelle
   const fetchSerieTemporelle = async (indicateurId: number, currentData: IndicateurData | null, currentAnnee: string) => {
-    // Récupérer toutes les liaisons où cet indicateur est impliqué
-    const { data: liaisons } = await supabase
-      .from('v_series_temporelles')
-      .select('*');
+    try {
+      // Récupérer toutes les liaisons où cet indicateur est impliqué
+      const liaisons = await views.seriesTemporelles(0, 99999);
 
-    if (!liaisons || liaisons.length === 0) {
-      // Pas de liaison, afficher les données originales
-      setDisplayData(currentData);
-      setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
-      setSerieIndicateurs([]);
-      return;
-    }
-
-    // Trouver toutes les liaisons impliquant cet indicateur
-    const relatedLiaisons = liaisons.filter(
-      l => l.source_id === indicateurId || l.cible_id === indicateurId
-    );
-
-    if (relatedLiaisons.length === 0) {
-      // Pas de liaison pour cet indicateur
-      setDisplayData(currentData);
-      setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
-      setSerieIndicateurs([]);
-      return;
-    }
-
-    // Vérifier si c'est une liaison de type "fusionne"
-    const fusionneLink = relatedLiaisons.find(l => l.type_liaison === 'fusionne');
-    
-    if (fusionneLink) {
-      // Récupérer les données fusionnées depuis tableaux_fusion
-      const { data: fusionData } = await supabase
-        .from('tableaux_fusion')
-        .select('*')
-        .eq('id_liaison', fusionneLink.liaison_id)
-        .maybeSingle();
-      
-      if (fusionData) {
-        setDisplayData({
-          id: fusionData.id,
-          entetes: fusionData.entetes_fusionnees as any,
-          donnees: fusionData.donnees_fusionnees as any
-        });
-        setDisplaySource(`Fusion ${fusionneLink.source_annee} + ${fusionneLink.cible_annee}`);
-        
-        // Construire la liste des indicateurs de la série
-        setSerieIndicateurs([
-          {
-            id: fusionneLink.source_id!,
-            code: fusionneLink.source_code!,
-            titre_fr: fusionneLink.source_titre!,
-            annee: fusionneLink.source_annee!,
-            type_liaison: 'fusionne'
-          },
-          {
-            id: fusionneLink.cible_id!,
-            code: fusionneLink.cible_code!,
-            titre_fr: fusionneLink.cible_titre!,
-            annee: fusionneLink.cible_annee!,
-            type_liaison: 'fusionne'
-          }
-        ]);
+      if (!liaisons || liaisons.length === 0) {
+        // Pas de liaison, afficher les données originales
+        setDisplayData(currentData);
+        setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
+        setSerieIndicateurs([]);
         return;
       }
-    }
 
-    // Vérifier si c'est une liaison de type "remplace"
-    const hasRemplaceLink = relatedLiaisons.some(l => l.type_liaison === 'remplace');
+      // Trouver toutes les liaisons impliquant cet indicateur
+      const relatedLiaisons = liaisons.filter(
+        l => l.source_id === indicateurId || l.cible_id === indicateurId
+      );
 
-    if (hasRemplaceLink) {
-      // Construire la chaîne complète des indicateurs liés par "remplace"
-      const chainedIndicators = await buildIndicatorChain(indicateurId, liaisons);
-      setSerieIndicateurs(chainedIndicators);
+      if (relatedLiaisons.length === 0) {
+        // Pas de liaison pour cet indicateur
+        setDisplayData(currentData);
+        setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
+        setSerieIndicateurs([]);
+        return;
+      }
 
-      // Trouver l'indicateur avec l'année la plus récente dans la chaîne
-      if (chainedIndicators.length > 0) {
-        const mostRecent = chainedIndicators.reduce((prev, curr) => 
-          curr.annee > prev.annee ? curr : prev
-        );
-
-        // Récupérer les données de l'indicateur le plus récent
-        if (mostRecent.id !== indicateurId) {
-          const { data: recentData } = await supabase
-            .from('tableaux_data')
-            .select('*')
-            .eq('id_tableau', mostRecent.id)
-            .maybeSingle();
-
-          if (recentData) {
-            setDisplayData(recentData);
-            setDisplaySource(`AS ${mostRecent.annee} (série temporelle - remplace)`);
+      // Vérifier si c'est une liaison de type "fusionne"
+      const fusionneLink = relatedLiaisons.find(l => l.type_liaison === 'fusionne');
+      
+      if (fusionneLink) {
+        // Récupérer les données fusionnées depuis tableaux_fusion
+        try {
+          const fusionData = await fusionApi.getByLiaison(fusionneLink.liaison_id);
+          
+          if (fusionData) {
+            setDisplayData({
+              id: fusionData.id,
+              entetes: fusionData.entetes_fusionnees as any,
+              donnees: fusionData.donnees_fusionnees as any
+            });
+            setDisplaySource(`Fusion ${fusionneLink.source_annee} + ${fusionneLink.cible_annee}`);
+            
+            // Construire la liste des indicateurs de la série
+            setSerieIndicateurs([
+              {
+                id: fusionneLink.source_id!,
+                code: fusionneLink.source_code!,
+                titre_fr: fusionneLink.source_titre!,
+                annee: fusionneLink.source_annee!,
+                type_liaison: 'fusionne'
+              },
+              {
+                id: fusionneLink.cible_id!,
+                code: fusionneLink.cible_code!,
+                titre_fr: fusionneLink.cible_titre!,
+                annee: fusionneLink.cible_annee!,
+                type_liaison: 'fusionne'
+              }
+            ]);
             return;
+          }
+        } catch {
+          // Fusion data non trouvée, on continue
+        }
+      }
+
+      // Vérifier si c'est une liaison de type "remplace"
+      const hasRemplaceLink = relatedLiaisons.some(l => l.type_liaison === 'remplace');
+
+      if (hasRemplaceLink) {
+        // Construire la chaîne complète des indicateurs liés par "remplace"
+        const chainedIndicators = await buildIndicatorChain(indicateurId, liaisons);
+        setSerieIndicateurs(chainedIndicators);
+
+        // Trouver l'indicateur avec l'année la plus récente dans la chaîne
+        if (chainedIndicators.length > 0) {
+          const mostRecent = chainedIndicators.reduce((prev, curr) => 
+            curr.annee > prev.annee ? curr : prev
+          );
+
+          // Récupérer les données de l'indicateur le plus récent
+          if (mostRecent.id !== indicateurId) {
+            try {
+              const recentData = await tableauxData.getByTableau(mostRecent.id);
+
+              if (recentData) {
+                setDisplayData(recentData);
+                setDisplaySource(`AS ${mostRecent.annee} (série temporelle - remplace)`);
+                return;
+              }
+            } catch {
+              // Données non trouvées
+            }
           }
         }
       }
-    }
 
-    // Par défaut, afficher les données originales
-    setDisplayData(currentData);
-    setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
+      // Par défaut, afficher les données originales
+      setDisplayData(currentData);
+      setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
+    } catch {
+      // Erreur lors de la récupération des séries, afficher les données originales
+      setDisplayData(currentData);
+      setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
+      setSerieIndicateurs([]);
+    }
   };
 
   // Construire la chaîne d'indicateurs liés
@@ -230,17 +235,16 @@ const IndicateurDetail = () => {
     const chain: SerieIndicateur[] = [];
     const queue = [startId];
 
+    // Récupérer tous les tableaux complets une seule fois
+    const allTableaux = await views.tableauxComplets({ from: 0, to: 99999 });
+
     while (queue.length > 0) {
       const currentId = queue.shift()!;
       if (visited.has(currentId)) continue;
       visited.add(currentId);
 
-      // Récupérer les infos de cet indicateur
-      const { data: indInfo } = await supabase
-        .from('v_tableaux_complets')
-        .select('id, code, titre_fr, annuaire_annee')
-        .eq('id', currentId)
-        .maybeSingle();
+      // Chercher les infos de cet indicateur dans la liste complète
+      const indInfo = allTableaux.find((t: any) => t.id === currentId);
 
       if (indInfo) {
         chain.push({

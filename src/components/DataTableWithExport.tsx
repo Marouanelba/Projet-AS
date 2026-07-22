@@ -25,11 +25,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Download, GripVertical, RotateCcw } from 'lucide-react';
-import type { Json } from '@/integrations/supabase/types';
 
 interface DataTableWithExportProps {
-  entetes: Json[][];
-  donnees: Json[][];
+  entetes: any[][];
+  donnees: any[][];
   displaySource?: string;
 }
 
@@ -54,7 +53,7 @@ const highlightIndices = (text: string | null) => {
   });
 };
 
-const renderTableCell = (cell: Json, isHeader = false) => {
+const renderTableCell = (cell: any, isHeader = false) => {
   if (typeof cell === 'string') return highlightIndices(cell);
   if (cell === null || cell === undefined) return isHeader ? '' : '';
   return String(cell);
@@ -166,7 +165,7 @@ export default function DataTableWithExport({
   }, [donnees, columnOrder]);
 
   const exportToCSV = useCallback(() => {
-    const escapeCSV = (val: Json): string => {
+    const escapeCSV = (val: any): string => {
       if (val === null || val === undefined) return '';
       const str = String(val);
       if (str.includes(',') || str.includes('"') || str.includes('\n')) {
@@ -208,7 +207,7 @@ export default function DataTableWithExport({
     }
 
     const data = reorderedDonnees.map((row) => {
-      const obj: Record<string, Json> = {};
+      const obj: Record<string, any> = {};
       if (Array.isArray(row)) {
         row.forEach((cell, idx) => {
           const key = headers[idx] || `col_${idx}`;

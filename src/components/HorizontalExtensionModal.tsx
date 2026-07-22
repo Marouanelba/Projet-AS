@@ -5,15 +5,14 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowRightLeft, Check, Info, Rows3, Columns } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { tableauxData, fusion as fusionApi } from '@/lib/api';
 import { toast } from 'sonner';
-import type { Json } from '@/integrations/supabase/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface IndicateurData {
   id: number;
-  entetes: Json[][];
-  donnees: Json[][];
+  entetes: any[][];
+  donnees: any[][];
 }
 
 interface HorizontalExtensionModalProps {
@@ -53,25 +52,29 @@ export const HorizontalExtensionModal = ({
     setLoading(true);
     setReferenceColumn('0');
     
-    const [sourceRes, cibleRes] = await Promise.all([
-      supabase.from('tableaux_data').select('*').eq('id_tableau', sourceId).maybeSingle(),
-      supabase.from('tableaux_data').select('*').eq('id_tableau', cibleId).maybeSingle()
-    ]);
+    try {
+      const [sourceRes, cibleRes] = await Promise.all([
+        tableauxData.getByTableau(sourceId),
+        tableauxData.getByTableau(cibleId)
+      ]);
 
-    if (sourceRes.data) {
-      setSourceData({
-        id: sourceRes.data.id,
-        entetes: sourceRes.data.entetes as Json[][],
-        donnees: sourceRes.data.donnees as Json[][]
-      });
-    }
+      if (sourceRes) {
+        setSourceData({
+          id: sourceRes.id,
+          entetes: sourceRes.entetes as any[][],
+          donnees: sourceRes.donnees as any[][]
+        });
+      }
 
-    if (cibleRes.data) {
-      setCibleData({
-        id: cibleRes.data.id,
-        entetes: cibleRes.data.entetes as Json[][],
-        donnees: cibleRes.data.donnees as Json[][]
-      });
+      if (cibleRes) {
+        setCibleData({
+          id: cibleRes.id,
+          entetes: cibleRes.entetes as any[][],
+          donnees: cibleRes.donnees as any[][]
+        });
+      }
+    } catch (err: any) {
+      toast.error('Erreur lors du chargement', { description: err.message });
     }
 
     setLoading(false);
@@ -100,8 +103,8 @@ export const HorizontalExtensionModal = ({
     const refColIdx = parseInt(referenceColumn);
 
     // Fonction pour détecter les années dans les lignes (tolère "2020 ", "2020(2)", etc.)
-    const getYearRowsWithStructure = (donnees: Json[][], colIndex: number = 0) => {
-      const years: { rowIndex: number; year: string; fullRow: Json[] }[] = [];
+    const getYearRowsWithStructure = (donnees: any[][], colIndex: number = 0) => {
+      const years: { rowIndex: number; year: string; fullRow: any[] }[] = [];
       donnees.forEach((row, rowIndex) => {
         const year = extractYear(row[colIndex]);
         if (year) {
@@ -112,10 +115,10 @@ export const HorizontalExtensionModal = ({
     };
 
     // Analyser la structure des regroupements (lignes consécutives par année)
-    const analyzeYearStructure = (donnees: Json[][], colIndex: number) => {
-      const yearGroups: Map<string, { startIndex: number; rows: Json[][] }> = new Map();
+    const analyzeYearStructure = (donnees: any[][], colIndex: number) => {
+      const yearGroups: Map<string, { startIndex: number; rows: any[][] }> = new Map();
       let currentYear: string | null = null;
-      let currentRows: Json[][] = [];
+      let currentRows: any[][] = [];
       let startIndex = 0;
 
       donnees.forEach((row, rowIndex) => {
@@ -144,7 +147,7 @@ export const HorizontalExtensionModal = ({
     };
 
     // Fonction pour détecter les années dans les colonnes (en-têtes)
-    const getYearColumns = (entetes: Json[][]) => {
+    const getYearColumns = (entetes: any[][]) => {
       const lastRow = entetes[entetes.length - 1];
       const years: { index: number; year: string }[] = [];
       lastRow.forEach((cell, index) => {
@@ -218,19 +221,19 @@ export const HorizontalExtensionModal = ({
   }, [sourceData, cibleData, referenceColumn]);
 
   // Construire le tableau étendu avec insertion intelligente
-  const buildExtendedTable = (): { entetes: Json[][]; donnees: Json[][] } => {
+  const buildExtendedTable = (): { entetes: any[][]; donnees: any[][] } => {
     if (!sourceData || !cibleData || !yearAnalysis) {
       return { entetes: [], donnees: [] };
     }
 
     if (yearAnalysis.mode === 'rows') {
       const newEntetes = [...cibleData.entetes];
-      const newDonnees: Json[][] = [];
+      const newDonnees: any[][] = [];
       const refColIdx = yearAnalysis.refColIdx;
       
       // Récupérer les structures
-      const sourceStructure = yearAnalysis.sourceStructure as Map<string, { startIndex: number; rows: Json[][] }>;
-      const cibleStructure = yearAnalysis.cibleStructure as Map<string, { startIndex: number; rows: Json[][] }>;
+      const sourceStructure = yearAnalysis.sourceStructure as Map<string, { startIndex: number; rows: any[][] }>;
+      const cibleStructure = yearAnalysis.cibleStructure as Map<string, { startIndex: number; rows: any[][] }>;
       
       // Obtenir toutes les années (source + cible) triées par ordre décroissant
       const allYears = [...new Set([...yearAnalysis.sourceYears, ...yearAnalysis.cibleYears])]
@@ -272,46 +275,28 @@ export const HorizontalExtensionModal = ({
 
     setSaving(true);
 
-    const fusion = buildExtendedTable();
+    const fusionData = buildExtendedTable();
 
-    const { error } = await supabase.from('tableaux_fusion').insert({
-      id_liaison: liaisonId,
-      strategie: 'extension_horizontale',
-      colonne_selectionnee: referenceColumn,
-      donnees_fusionnees: fusion.donnees,
-      entetes_fusionnees: fusion.entetes
-    });
+    try {
+      await fusionApi.upsert({
+        id_liaison: liaisonId,
+        strategie: 'extension_horizontale',
+        colonne_selectionnee: referenceColumn,
+        donnees_fusionnees: fusionData.donnees,
+        entetes_fusionnees: fusionData.entetes
+      });
 
-    setSaving(false);
-
-    if (error) {
-      if (error.code === '23505') {
-        const { error: updateError } = await supabase
-          .from('tableaux_fusion')
-          .update({
-            strategie: 'extension_horizontale',
-            colonne_selectionnee: referenceColumn,
-            donnees_fusionnees: fusion.donnees,
-            entetes_fusionnees: fusion.entetes
-          })
-          .eq('id_liaison', liaisonId);
-        
-        if (updateError) {
-          toast.error('Erreur lors de la mise à jour', { description: updateError.message });
-          return;
-        }
-      } else {
-        toast.error('Erreur lors de la sauvegarde', { description: error.message });
-        return;
-      }
+      const yearsAdded = yearAnalysis.onlyInSource.map(y => 'year' in y ? y.year : '').filter(Boolean).join(', ');
+      toast.success('Extension horizontale créée', {
+        description: `Années ajoutées: ${yearsAdded}`
+      });
+      onOpenChange(false);
+      onSuccess();
+    } catch (err: any) {
+      toast.error('Erreur lors de la sauvegarde', { description: err.message });
     }
 
-    const yearsAdded = yearAnalysis.onlyInSource.map(y => 'year' in y ? y.year : '').filter(Boolean).join(', ');
-    toast.success('Extension horizontale créée', {
-      description: `Années ajoutées: ${yearsAdded}`
-    });
-    onOpenChange(false);
-    onSuccess();
+    setSaving(false);
   };
 
   const canCreate = yearAnalysis && yearAnalysis.onlyInSource.length > 0;

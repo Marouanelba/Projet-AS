@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { views } from '@/lib/api';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, ArrowRight, Database, Search, BarChart3, CalendarDays, SortAsc, Filter } from "lucide-react";
@@ -29,7 +29,7 @@ export default function ThematiqueExplorer() {
     setLoading(true);
     const allRows: TableauRow[] = []; let offset = 0; let hasMore = true;
     while (hasMore) {
-      const { data } = await supabase.from("v_tableaux_complets").select("id, code, titre_fr, annuaire_annee, thematique_nom").range(offset, offset + 999);
+      const data = await views.tableauxComplets({ select: 'id,code,titre_fr,annuaire_annee,thematique_nom', from: offset, to: offset + 999 });
       if (data && data.length > 0) { allRows.push(...(data as TableauRow[])); if (data.length < 1000) hasMore = false; else offset += 1000; } else hasMore = false;
     }
     setTableaux(allRows.filter(r => normalizeThematiqueName(r.thematique_nom || "") === thematiqueName));

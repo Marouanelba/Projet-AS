@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { views, tableauxData } from '@/lib/api';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, ArrowLeft, Table2, BarChart3, Layers, Calendar } from "lucide-react";
@@ -8,11 +8,10 @@ import DataTableWithExport from "@/components/DataTableWithExport";
 import ChartBuilder from "@/components/ChartBuilder";
 import ExistingSeriesViewer from "@/components/ExistingSeriesViewer";
 import { cleanIndicateurTitle, normalizeForComparison } from "@/lib/indicateur-utils";
-import type { Json } from "@/integrations/supabase/types";
 
 interface TableauMeta { id: number; code: string; titre_fr: string; annuaire_annee: string; thematique_nom: string; }
-interface TableauData { entetes: Json[][]; donnees: Json[][]; }
-interface TableauWithData { id: number; code: string; titre_fr: string; annuaire_annee: string; entetes: Json[][]; donnees: Json[][]; }
+interface TableauData { entetes: any[][]; donnees: any[][]; }
+interface TableauWithData { id: number; code: string; titre_fr: string; annuaire_annee: string; entetes: any[][]; donnees: any[][]; }
 
 export default function TableauThematiqueDetail() {
   const { id } = useParams<{ id: string }>(); const [searchParams] = useSearchParams(); const navigate = useNavigate();
@@ -25,21 +24,42 @@ export default function TableauThematiqueDetail() {
 
   const loadAll = async () => {
     setLoading(true);
-    const [metaRes, dataRes] = await Promise.all([supabase.from("v_tableaux_complets").select("id, code, titre_fr, annuaire_annee, thematique_nom").eq("id", tableauId).single(), supabase.from("tableaux_data").select("entetes, donnees").eq("id_tableau", tableauId).single()]);
-    if (metaRes.data) {
-      const meta = metaRes.data as TableauMeta; setTableau(meta); if (dataRes.data) setData(dataRes.data as TableauData);
-      const { data: liaisons } = await supabase.from("v_series_temporelles").select("liaison_id").or(`source_id.eq.${tableauId},cible_id.eq.${tableauId}`).limit(1);
-      setHasExistingSeries(!!(liaisons && liaisons.length > 0));
-      await loadAdjacentTableaux(meta);
+    try {
+      const [allMeta, dataResult] = await Promise.all([
+        views.tableauxComplets({ from: 0, to: 99999 }),
+        tableauxData.getByTableau(tableauId),
+      ]);
+
+      const metaRow = allMeta.find((r: any) => r.id === tableauId);
+      if (metaRow) {
+        const meta = metaRow as TableauMeta;
+        setTableau(meta);
+        if (dataResult) setData(dataResult as TableauData);
+
+        // Check if series exist via views
+        const seriesRows = await views.seriesTemporelles(0, 99999);
+        const hasLinks = seriesRows.some((r: any) => r.source_id === tableauId || r.cible_id === tableauId);
+        setHasExistingSeries(hasLinks);
+
+        await loadAdjacentTableaux(meta, allMeta);
+      }
+    } catch (e) {
+      console.error("Error loading tableau:", e);
     }
     setLoading(false);
   };
 
-  const loadAdjacentTableaux = async (meta: TableauMeta) => {
+  const loadAdjacentTableaux = async (meta: TableauMeta, allMeta?: any[]) => {
     const currentYear = parseInt(meta.annuaire_annee); const currentCleanTitle = normalizeForComparison(cleanIndicateurTitle(meta.titre_fr));
-    const { data: allRows } = await supabase.from("v_tableaux_complets").select("id, code, titre_fr, annuaire_annee, thematique_nom").eq("thematique_nom", meta.thematique_nom);
-    if (!allRows || allRows.length === 0) { setAdjacentWithData([]); return; }
-    const allSiblings = (allRows as TableauMeta[]).filter(r => normalizeForComparison(cleanIndicateurTitle(r.titre_fr)) === currentCleanTitle);
+
+    let allRows = allMeta;
+    if (!allRows) {
+      allRows = await views.tableauxComplets({ from: 0, to: 99999 });
+    }
+    const filteredRows = allRows.filter((r: any) => r.thematique_nom === meta.thematique_nom);
+
+    if (filteredRows.length === 0) { setAdjacentWithData([]); return; }
+    const allSiblings = (filteredRows as TableauMeta[]).filter(r => normalizeForComparison(cleanIndicateurTitle(r.titre_fr)) === currentCleanTitle);
     const seenY = new Set<string>(); const deduped = allSiblings.filter(t => { if (seenY.has(t.annuaire_annee)) return false; seenY.add(t.annuaire_annee); return true; });
     deduped.sort((a, b) => b.annuaire_annee.localeCompare(a.annuaire_annee));
     setSiblingYears(deduped.map(t => ({ id: t.id, annee: t.annuaire_annee })));
@@ -47,7 +67,16 @@ export default function TableauThematiqueDetail() {
     const seenY2 = new Set<string>(); const deduped2 = matching.filter(t => { if (seenY2.has(t.annuaire_annee)) return false; seenY2.add(t.annuaire_annee); return true; });
     deduped2.sort((a, b) => b.annuaire_annee.localeCompare(a.annuaire_annee));
     const ids = deduped2.map(t => t.id); const results: TableauWithData[] = [];
-    if (ids.length > 0) { const { data: dataRows } = await supabase.from("tableaux_data").select("id_tableau, entetes, donnees").in("id_tableau", ids); const dm = new Map<number, TableauData>(); if (dataRows) dataRows.forEach((d: any) => dm.set(d.id_tableau, { entetes: d.entetes, donnees: d.donnees })); deduped2.forEach(t => { const td = dm.get(t.id); if (td) results.push({ ...t, ...td }); }); }
+    if (ids.length > 0) {
+      try {
+        const dataRows = await tableauxData.getByTableaux(ids);
+        const dm = new Map<number, TableauData>();
+        if (dataRows) dataRows.forEach((d: any) => dm.set(d.id_tableau, { entetes: d.entetes, donnees: d.donnees }));
+        deduped2.forEach(t => { const td = dm.get(t.id); if (td) results.push({ ...t, ...td }); });
+      } catch (e) {
+        console.error("Error loading adjacent data:", e);
+      }
+    }
     setAdjacentWithData(results);
   };
 

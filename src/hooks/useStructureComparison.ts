@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { tableauxData } from '@/lib/api';
 
 export interface IndicateurData {
   id: number;
@@ -259,40 +259,32 @@ export const useStructureComparison = (sourceId: number | null, cibleId: number 
 
       try {
         const [sourceRes, cibleRes] = await Promise.all([
-          supabase
-            .from('tableaux_data')
-            .select('id, entetes, donnees')
-            .eq('id_tableau', sourceId)
-            .single(),
-          supabase
-            .from('tableaux_data')
-            .select('id, entetes, donnees')
-            .eq('id_tableau', cibleId)
-            .single()
+          tableauxData.getByTableau(sourceId),
+          tableauxData.getByTableau(cibleId)
         ]);
 
-        if (sourceRes.error || !sourceRes.data) {
+        if (!sourceRes) {
           setError('Données source non trouvées');
           setLoading(false);
           return;
         }
 
-        if (cibleRes.error || !cibleRes.data) {
+        if (!cibleRes) {
           setError('Données cible non trouvées');
           setLoading(false);
           return;
         }
 
         const source: IndicateurData = {
-          id: sourceRes.data.id,
-          entetes: sourceRes.data.entetes as unknown[][],
-          donnees: sourceRes.data.donnees as unknown[][]
+          id: sourceRes.id,
+          entetes: sourceRes.entetes as unknown[][],
+          donnees: sourceRes.donnees as unknown[][]
         };
 
         const cible: IndicateurData = {
-          id: cibleRes.data.id,
-          entetes: cibleRes.data.entetes as unknown[][],
-          donnees: cibleRes.data.donnees as unknown[][]
+          id: cibleRes.id,
+          entetes: cibleRes.entetes as unknown[][],
+          donnees: cibleRes.donnees as unknown[][]
         };
 
         setSourceData(source);

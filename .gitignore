@@ -2,7 +2,7 @@
 node_modules
 
 # Build output
-
+dist
 dist-ssr
 
 # Environment variables (secrets)
@@ -34,8 +34,8 @@ lerna-debug.log*
 *.sw?
 Thumbs.db
 
-# Supabase local
-supabase/.temp
+# Server build output
+server/dist
 
 # Lock files (optional - keep one)
 bun.lockb

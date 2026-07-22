@@ -1,0 +1,17 @@
+{
+  "annuaires": [
+    {
+      "annee": "2025",
+      "titre_fr": "Annuaire Statistique 2025",
+      "titre_ar": "الحولية الإحصائية 2025",
+      "thematiques": [
+        {
+          "code": "3",
+          "nom": "Agriculture et élevage",
+          "nom_ar": "الفلاحة وتربية المواشي",
+          "nb_indicateurs": 1
+        }
+      ]
+    }
+  ]
+}

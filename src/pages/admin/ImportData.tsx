@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { admin } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -82,22 +82,7 @@ const ImportData = () => {
   const clearAllTables = async () => {
     setClearing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clear-tables`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session?.access_token || ''}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}`);
-      }
-
+      await admin.clearTables();
       toast.success('Tables vidées', { description: 'Toutes les données ont été supprimées' });
       setFileResults([]);
     } catch (error) {
@@ -108,39 +93,15 @@ const ImportData = () => {
     }
   };
 
-  const lastRefreshRef = useRef<number>(0);
-
-  const ensureSession = async (): Promise<boolean> => {
-    const now = Date.now();
-    // Refresh every 2 minutes for long imports
-    if (now - lastRefreshRef.current > 2 * 60 * 1000) {
-      const { error } = await supabase.auth.refreshSession();
-      if (error) return false;
-      lastRefreshRef.current = now;
-    }
-    return true;
-  };
-
   const invokeImport = async (data: any): Promise<{ results?: ImportResults; error?: string }> => {
-    const sessionOk = await ensureSession();
-    if (!sessionOk) return { error: 'Session expirée. Veuillez vous reconnecter.' };
-
-    const { data: response, error } = await supabase.functions.invoke('import-data', { body: data });
-    if (error) {
-      // Retry on auth error
-      if (error.message?.includes('JWT') || error.message?.includes('401') || error.message?.includes('auth')) {
-        lastRefreshRef.current = 0;
-        const retryOk = await ensureSession();
-        if (!retryOk) return { error: 'Session expirée. Veuillez vous reconnecter.' };
-        const { data: r2, error: e2 } = await supabase.functions.invoke('import-data', { body: data });
-        if (e2) return { error: e2.message };
-        if (r2.error) return { error: r2.error };
-        return { results: r2.results };
-      }
-      return { error: error.message };
+    try {
+      const type = data.annuaires ? 'metadata' : 'indicateur';
+      const response = await admin.importData(type, data);
+      return { results: response.results };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erreur inconnue';
+      return { error: message };
     }
-    if (response.error) return { error: response.error };
-    return { results: response.results };
   };
 
   /** Merge partial results into a cumulative ImportResults */
@@ -284,9 +245,6 @@ const ImportData = () => {
 
       const file = jsonFiles[i];
       setProgressLabel(`Fichier ${i + 1}/${totalFiles}: ${file.name}`);
-      
-      // Ensure session is fresh every 2 minutes
-      await ensureSession();
       
       const result = await processFile(file);
       results.push(result);

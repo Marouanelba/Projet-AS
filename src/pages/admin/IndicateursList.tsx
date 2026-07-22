@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { views, annuaires as annuairesApi, thematiques as thematiquesApi } from '@/lib/api';
 import { normalizeThematiqueName } from '@/lib/thematique-utils';
 import { cleanIndicateurTitle, normalizeCode } from '@/lib/indicateur-utils';
 import AdminLayout from '@/components/AdminLayout';
@@ -77,36 +77,36 @@ const IndicateursList = () => {
   const fetchData = async () => {
     setLoading(true);
     
-    // Fetch all tableaux (paginated - default limit is 1000)
-    const fetchAllTableaux = async () => {
-      const allRows: Indicateur[] = [];
-      let from = 0;
-      const pageSize = 1000;
-      while (true) {
-        const { data, error } = await supabase
-          .from('v_tableaux_complets')
-          .select('*')
-          .order('id', { ascending: true })
-          .range(from, from + pageSize - 1);
-        if (error || !data || data.length === 0) break;
-        allRows.push(...(data as Indicateur[]));
-        if (data.length < pageSize) break;
-        from += pageSize;
-      }
-      return allRows;
-    };
-    
-    const [annuairesRes, thematiquesRes, allTableaux] = await Promise.all([
-      supabase.from('annuaires').select('*').order('annee', { ascending: false }),
-      supabase.from('thematiques').select('*').order('code'),
-      fetchAllTableaux()
-    ]);
+    try {
+      // Fetch all tableaux (paginated - default limit is 1000)
+      const fetchAllTableaux = async () => {
+        const allRows: Indicateur[] = [];
+        let from = 0;
+        const pageSize = 1000;
+        while (true) {
+          const data = await views.tableauxComplets({ order_by: 'id', order_dir: 'ASC', from: from, to: from + pageSize - 1 });
+          if (!data || data.length === 0) break;
+          allRows.push(...(data as Indicateur[]));
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
+        return allRows;
+      };
+      
+      const [annuairesData, thematiquesData, allTableaux] = await Promise.all([
+        annuairesApi.getAll('desc'),
+        thematiquesApi.getAll({ order: 'code' }),
+        fetchAllTableaux()
+      ]);
 
-    if (annuairesRes.data) setAnnuaires(annuairesRes.data);
-    if (thematiquesRes.data) setThematiques(thematiquesRes.data);
-    if (allTableaux) setIndicateurs(allTableaux);
-    
-    setLoading(false);
+      setAnnuaires(annuairesData);
+      setThematiques(thematiquesData);
+      setIndicateurs(allTableaux);
+    } catch (error) {
+      console.error('Erreur lors du chargement des données:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Annuaires disponibles — tous les annuaires (pas de filtrage croisé pour permettre les combinaisons)

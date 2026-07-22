@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { views, tableauxData, ruptures as rupturesApi } from '@/lib/api';
 import { ArrowLeft, BarChart3, Loader2, RefreshCw, Table as TableIcon, Link2, Layers, LineChart, Home, CalendarDays, Database, FileText } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DataTableWithExport from "@/components/DataTableWithExport";
 import ChartBuilder from "@/components/ChartBuilder";
-import type { Json } from "@/integrations/supabase/types";
+
 
 interface IndicateurSummary { id: number; code: string; titre_fr: string | null; annuaire_annee: string | null; thematique_nom: string | null; unite_fr: string | null; source_fr: string | null; notes_fr: string | null; }
-interface IndicateurData { id: number; entetes: Json[][]; donnees: Json[][]; }
-interface SerieIndicateur { id: number; code: string; titre_fr: string; annee: string; donnees?: Json[][] | null; entetes?: Json[][] | null; }
+interface IndicateurData { id: number; entetes: any[][]; donnees: any[][]; }
+interface SerieIndicateur { id: number; code: string; titre_fr: string; annee: string; donnees?: any[][] | null; entetes?: any[][] | null; }
 interface Rupture { id: number; id_tableau: number; annee_rupture: string; direction: 'precedente' | 'suivante'; }
 interface SerieTemporelleRow { liaison_id: number | null; type_liaison: string | null; source_id: number | null; source_code: string | null; source_titre: string | null; source_annee: string | null; cible_id: number | null; cible_code: string | null; cible_titre: string | null; cible_annee: string | null; }
 type StrategyType = "none" | "fusionne" | "remplace" | "serie";
@@ -22,9 +22,10 @@ const highlightIndices = (text: string | null) => {
 
 const buildChain = async (startId: number, allLiaisons: SerieTemporelleRow[], allowedTypes: string[], ruptures: Rupture[] = []): Promise<SerieIndicateur[]> => {
   const visited = new Set<number>(); const chain: SerieIndicateur[] = []; const queue: number[] = [startId];
+  const allMeta = await views.tableauxComplets({ from: 0, to: 99999 });
   while (queue.length > 0) {
     const currentId = queue.shift()!; if (visited.has(currentId)) continue; visited.add(currentId);
-    const { data: indInfo } = await supabase.from("v_tableaux_complets").select("id, code, titre_fr, annuaire_annee").eq("id", currentId).maybeSingle();
+    const indInfo = allMeta.find((r: any) => r.id === currentId);
     if (indInfo?.id && indInfo.code && indInfo.titre_fr && indInfo.annuaire_annee) chain.push({ id: indInfo.id, code: indInfo.code, titre_fr: indInfo.titre_fr, annee: indInfo.annuaire_annee });
     const connected = allLiaisons.filter(l => !!l.type_liaison && allowedTypes.includes(l.type_liaison) && (l.source_id === currentId || l.cible_id === currentId));
     for (const liaison of connected) {
@@ -42,23 +43,27 @@ const buildChain = async (startId: number, allLiaisons: SerieTemporelleRow[], al
   return chain.sort((a, b) => a.annee.localeCompare(b.annee));
 };
 
-const computeDynamicFusion = async (chain: SerieIndicateur[]): Promise<{ entetes: Json[][]; donnees: Json[][]; source: string } | null> => {
+const computeDynamicFusion = async (chain: SerieIndicateur[]): Promise<{ entetes: any[][]; donnees: any[][]; source: string } | null> => {
   if (chain.length === 0) return null;
-  const chainWithData = await Promise.all(chain.map(async (item) => { const { data } = await supabase.from("tableaux_data").select("entetes, donnees").eq("id_tableau", item.id).maybeSingle(); return { ...item, entetes: data?.entetes as Json[][] | null, donnees: data?.donnees as Json[][] | null }; }));
+  const chainIds = chain.map(item => item.id);
+  const allDataRows = await tableauxData.getByTableaux(chainIds);
+  const dataMap = new Map<number, { entetes: any[][]; donnees: any[][] }>();
+  if (allDataRows) allDataRows.forEach((d: any) => dataMap.set(d.id_tableau, { entetes: d.entetes, donnees: d.donnees }));
+  const chainWithData = chain.map(item => ({ ...item, entetes: dataMap.get(item.id)?.entetes as any[][] | null, donnees: dataMap.get(item.id)?.donnees as any[][] | null }));
   const withData = chainWithData.filter(item => item.donnees && item.entetes);
   if (withData.length === 0) return null;
   if (withData.length === 1) return { entetes: withData[0].entetes!, donnees: withData[0].donnees!, source: `AS ${withData[0].annee}` };
   withData.sort((a, b) => b.annee.localeCompare(a.annee));
-  const columnsByYear = new Map<string, { headerCells: Json[], dataColumn: Json[] }[]>();
-  let firstTextColumn: { header: Json[], data: Json[] } | null = null;
-  let lastTextColumn: { header: Json[], data: Json[] } | null = null;
+  const columnsByYear = new Map<string, { headerCells: any[], dataColumn: any[] }[]>();
+  let firstTextColumn: { header: any[], data: any[] } | null = null;
+  let lastTextColumn: { header: any[], data: any[] } | null = null;
   const yearRegex = /(?<!\d)(19|20)\d{2}(?!\d)/;
-  const findColumnYear = (entetes: Json[][], colIdx: number): string | null => { for (const row of entetes) { const m = String(row?.[colIdx] ?? "").trim().match(yearRegex); if (m) return m[0]; } return null; };
-  const findTableauYear = (entetes: Json[][]): string | null => { for (const row of entetes) { for (const cell of row || []) { const m = String(cell ?? "").match(yearRegex); if (m) return m[0]; } } return null; };
+  const findColumnYear = (entetes: any[][], colIdx: number): string | null => { for (const row of entetes) { const m = String(row?.[colIdx] ?? "").trim().match(yearRegex); if (m) return m[0]; } return null; };
+  const findTableauYear = (entetes: any[][]): string | null => { for (const row of entetes) { for (const cell of row || []) { const m = String(cell ?? "").match(yearRegex); if (m) return m[0]; } } return null; };
   for (const asData of withData) {
     const entetes = asData.entetes!; const donnees = asData.donnees!; const lastHeaderRow = entetes[entetes.length - 1]; const nbCols = lastHeaderRow.length;
     const tableauYear = findTableauYear(entetes);
-    const yearBlocksThisTable = new Map<string, { headerCells: Json[], dataColumn: Json[] }[]>();
+    const yearBlocksThisTable = new Map<string, { headerCells: any[], dataColumn: any[] }[]>();
     for (let colIdx = 0; colIdx < nbCols; colIdx++) {
       const colYear = findColumnYear(entetes, colIdx); const headerCells = entetes.map(row => row[colIdx] ?? ""); const dataColumn = donnees.map(row => row[colIdx] ?? "");
       if (colIdx === 0 && !colYear) { if (!firstTextColumn) firstTextColumn = { header: headerCells, data: dataColumn }; continue; }
@@ -70,12 +75,12 @@ const computeDynamicFusion = async (chain: SerieIndicateur[]): Promise<{ entetes
     for (const [year, block] of yearBlocksThisTable) { if (!columnsByYear.has(year)) columnsByYear.set(year, block); }
   }
   const sortedYears = Array.from(columnsByYear.keys()).sort((a, b) => b.localeCompare(a));
-  const flatColumns: { headerCells: Json[], dataColumn: Json[] }[] = [];
+  const flatColumns: { headerCells: any[], dataColumn: any[] }[] = [];
   for (const year of sortedYears) columnsByYear.get(year)!.forEach(col => flatColumns.push(col));
   const nbHeaderRows = withData[0].entetes!.length; const nbDataRows = withData[0].donnees!.length;
-  const fusionEntetes: Json[][] = []; const fusionDonnees: Json[][] = [];
-  for (let r = 0; r < nbHeaderRows; r++) { const row: Json[] = []; if (firstTextColumn) row.push(firstTextColumn.header[r]); for (const col of flatColumns) row.push(col.headerCells[r]); if (lastTextColumn && firstTextColumn !== lastTextColumn) row.push(lastTextColumn.header[r]); fusionEntetes.push(row); }
-  for (let r = 0; r < nbDataRows; r++) { const row: Json[] = []; if (firstTextColumn) row.push(firstTextColumn.data[r]); for (const col of flatColumns) row.push(col.dataColumn[r]); if (lastTextColumn && firstTextColumn !== lastTextColumn) row.push(lastTextColumn.data[r]); fusionDonnees.push(row); }
+  const fusionEntetes: any[][] = []; const fusionDonnees: any[][] = [];
+  for (let r = 0; r < nbHeaderRows; r++) { const row: any[] = []; if (firstTextColumn) row.push(firstTextColumn.header[r]); for (const col of flatColumns) row.push(col.headerCells[r]); if (lastTextColumn && firstTextColumn !== lastTextColumn) row.push(lastTextColumn.header[r]); fusionEntetes.push(row); }
+  for (let r = 0; r < nbDataRows; r++) { const row: any[] = []; if (firstTextColumn) row.push(firstTextColumn.data[r]); for (const col of flatColumns) row.push(col.dataColumn[r]); if (lastTextColumn && firstTextColumn !== lastTextColumn) row.push(lastTextColumn.data[r]); fusionDonnees.push(row); }
   return { entetes: fusionEntetes, donnees: fusionDonnees, source: `Série fusionnée (${sortedYears.join(", ")})` };
 };
 
@@ -98,49 +103,57 @@ export default function IndicateurPublicDetail() {
 
   const loadYearData = async (target: SerieIndicateur) => {
     setSelectedYearSource(`AS ${target.annee}`);
-    const { data } = await supabase.from("tableaux_data").select("id, entetes, donnees").eq("id_tableau", target.id).maybeSingle();
-    if (!data) { setSelectedYearData(null); return; }
-    setSelectedYearData({ id: data.id, entetes: data.entetes as unknown as Json[][], donnees: data.donnees as unknown as Json[][] });
+    try {
+      const data = await tableauxData.getByTableau(target.id);
+      if (!data) { setSelectedYearData(null); return; }
+      setSelectedYearData({ id: data.id, entetes: data.entetes as any[][], donnees: data.donnees as any[][] });
+    } catch (e) {
+      setSelectedYearData(null);
+    }
   };
 
   const load = async (indicateurId: number) => {
     setLoading(true); setFusionData(null); setFusionSource("");
-    const [indRes, dataRes, liaisonsRes, rupturesRes] = await Promise.all([
-      supabase.from("v_tableaux_complets").select("id, code, titre_fr, annuaire_annee, thematique_nom, unite_fr, source_fr, notes_fr").eq("id", indicateurId).maybeSingle(),
-      supabase.from("tableaux_data").select("id, entetes, donnees").eq("id_tableau", indicateurId).maybeSingle(),
-      supabase.from("v_series_temporelles").select("*"),
-      supabase.from("tableaux_ruptures").select("id, id_tableau, annee_rupture, direction"),
-    ]);
-    const ind = indRes.data as unknown as IndicateurSummary | null; setIndicateur(ind);
-    const currentData = dataRes.data ? { id: dataRes.data.id, entetes: dataRes.data.entetes as unknown as Json[][], donnees: dataRes.data.donnees as unknown as Json[][] } satisfies IndicateurData : null;
-    const liaisons = (liaisonsRes.data || []) as unknown as SerieTemporelleRow[]; const ruptures = (rupturesRes.data || []) as Rupture[];
-    const related = liaisons.filter(l => l.source_id === indicateurId || l.cible_id === indicateurId);
+    try {
+      const [allMeta, dataRes, liaisonsRes, rupturesRes] = await Promise.all([
+        views.tableauxComplets({ from: 0, to: 99999 }),
+        tableauxData.getByTableau(indicateurId),
+        views.seriesTemporelles(0, 99999),
+        rupturesApi.getAll(0, 99999),
+      ]);
+      const ind = allMeta.find((r: any) => r.id === indicateurId) as IndicateurSummary | null; setIndicateur(ind);
+      const currentData = dataRes ? { id: dataRes.id, entetes: dataRes.entetes as any[][], donnees: dataRes.donnees as any[][] } satisfies IndicateurData : null;
+      const liaisons = (liaisonsRes || []) as unknown as SerieTemporelleRow[]; const rupturesData = (rupturesRes || []) as Rupture[];
+      const related = liaisons.filter(l => l.source_id === indicateurId || l.cible_id === indicateurId);
 
-    // Strategy 1: Fusionne
-    if (related.some(l => l.type_liaison === "fusionne")) {
-      const chain = await buildChain(indicateurId, liaisons, ["fusionne"], ruptures);
-      if (chain.length > 0) { setSerie(chain); setStrategyType("fusionne"); const mr = chain.reduce<SerieIndicateur|null>((p,c) => (!p||c.annee>p.annee)?c:p, null);
+      // Strategy 1: Fusionne
+      if (related.some(l => l.type_liaison === "fusionne")) {
+        const chain = await buildChain(indicateurId, liaisons, ["fusionne"], rupturesData);
+        if (chain.length > 0) { setSerie(chain); setStrategyType("fusionne"); const mr = chain.reduce<SerieIndicateur|null>((p,c) => (!p||c.annee>p.annee)?c:p, null);
+          if (mr) { setStrategyActiveId(mr.id); const df = await computeDynamicFusion(chain); if (df) { const obj = { id: 0, entetes: df.entetes, donnees: df.donnees }; setFusionData(obj); setFusionSource(df.source); setStrategyData(obj); setStrategySource(df.source); setLoading(false); document.title = `${ind?.titre_fr||"Tableau"} • Annuaire Statistique`; return; }
+            const rd = await tableauxData.getByTableau(mr.id);
+            if (rd) { setStrategyData({ id: rd.id, entetes: rd.entetes as any[][], donnees: rd.donnees as any[][] }); setStrategySource(`AS ${mr.annee}`); setLoading(false); document.title = `${ind?.titre_fr||"Tableau"} • Annuaire Statistique`; return; } } } }
+
+      // Strategy 2: Remplace
+      if (related.some(l => l.type_liaison === "remplace")) {
+        const chain = await buildChain(indicateurId, liaisons, ["remplace"], rupturesData); setSerie(chain); setStrategyType("remplace");
+        const mr = chain.reduce<SerieIndicateur|null>((p,c) => (!p||c.annee>p.annee)?c:p, null);
+        if (mr) { setStrategyActiveId(mr.id); if (mr.id !== indicateurId) { const rd = await tableauxData.getByTableau(mr.id); if (rd) { setStrategyData({ id: rd.id, entetes: rd.entetes as any[][], donnees: rd.donnees as any[][] }); setStrategySource(`AS ${mr.annee} (remplace)`); setLoading(false); document.title = `${ind?.titre_fr||"Tableau"} • Annuaire Statistique`; return; } }
+          setStrategyData(currentData); setStrategySource(ind?.annuaire_annee ? `AS ${ind.annuaire_annee}` : ""); setLoading(false); document.title = `${ind?.titre_fr||"Tableau"} • Annuaire Statistique`; return; } }
+
+      // Strategy 3: Serie/Extension
+      if (related.some(l => l.type_liaison === "serie_temporelle" || l.type_liaison === "equivalent" || l.type_liaison === "extension_horizontale")) {
+        const chain = await buildChain(indicateurId, liaisons, ["serie_temporelle", "equivalent", "extension_horizontale"], rupturesData); setSerie(chain); setStrategyType("serie");
+        const mr = chain.reduce<SerieIndicateur|null>((p,c) => (!p||c.annee>p.annee)?c:p, null);
         if (mr) { setStrategyActiveId(mr.id); const df = await computeDynamicFusion(chain); if (df) { const obj = { id: 0, entetes: df.entetes, donnees: df.donnees }; setFusionData(obj); setFusionSource(df.source); setStrategyData(obj); setStrategySource(df.source); setLoading(false); document.title = `${ind?.titre_fr||"Tableau"} • Annuaire Statistique`; return; }
-          const { data: rd } = await supabase.from("tableaux_data").select("id, entetes, donnees").eq("id_tableau", mr.id).maybeSingle();
-          if (rd) { setStrategyData({ id: rd.id, entetes: rd.entetes as unknown as Json[][], donnees: rd.donnees as unknown as Json[][] }); setStrategySource(`AS ${mr.annee}`); setLoading(false); document.title = `${ind?.titre_fr||"Tableau"} • Annuaire Statistique`; return; } } } }
+          const rd = await tableauxData.getByTableau(mr.id);
+          if (rd) { setStrategyData({ id: rd.id, entetes: rd.entetes as any[][], donnees: rd.donnees as any[][] }); setStrategySource(`AS ${mr.annee}`); setLoading(false); document.title = `${ind?.titre_fr||"Tableau"} • Annuaire Statistique`; return; } } }
 
-    // Strategy 2: Remplace
-    if (related.some(l => l.type_liaison === "remplace")) {
-      const chain = await buildChain(indicateurId, liaisons, ["remplace"], ruptures); setSerie(chain); setStrategyType("remplace");
-      const mr = chain.reduce<SerieIndicateur|null>((p,c) => (!p||c.annee>p.annee)?c:p, null);
-      if (mr) { setStrategyActiveId(mr.id); if (mr.id !== indicateurId) { const { data: rd } = await supabase.from("tableaux_data").select("id, entetes, donnees").eq("id_tableau", mr.id).maybeSingle(); if (rd) { setStrategyData({ id: rd.id, entetes: rd.entetes as unknown as Json[][], donnees: rd.donnees as unknown as Json[][] }); setStrategySource(`AS ${mr.annee} (remplace)`); setLoading(false); document.title = `${ind?.titre_fr||"Tableau"} • Annuaire Statistique`; return; } }
-        setStrategyData(currentData); setStrategySource(ind?.annuaire_annee ? `AS ${ind.annuaire_annee}` : ""); setLoading(false); document.title = `${ind?.titre_fr||"Tableau"} • Annuaire Statistique`; return; } }
-
-    // Strategy 3: Serie/Extension
-    if (related.some(l => l.type_liaison === "serie_temporelle" || l.type_liaison === "equivalent" || l.type_liaison === "extension_horizontale")) {
-      const chain = await buildChain(indicateurId, liaisons, ["serie_temporelle", "equivalent", "extension_horizontale"], ruptures); setSerie(chain); setStrategyType("serie");
-      const mr = chain.reduce<SerieIndicateur|null>((p,c) => (!p||c.annee>p.annee)?c:p, null);
-      if (mr) { setStrategyActiveId(mr.id); const df = await computeDynamicFusion(chain); if (df) { const obj = { id: 0, entetes: df.entetes, donnees: df.donnees }; setFusionData(obj); setFusionSource(df.source); setStrategyData(obj); setStrategySource(df.source); setLoading(false); document.title = `${ind?.titre_fr||"Tableau"} • Annuaire Statistique`; return; }
-        const { data: rd } = await supabase.from("tableaux_data").select("id, entetes, donnees").eq("id_tableau", mr.id).maybeSingle();
-        if (rd) { setStrategyData({ id: rd.id, entetes: rd.entetes as unknown as Json[][], donnees: rd.donnees as unknown as Json[][] }); setStrategySource(`AS ${mr.annee}`); setLoading(false); document.title = `${ind?.titre_fr||"Tableau"} • Annuaire Statistique`; return; } } }
-
-    // Strategy 4: None
-    setSerie([]); setStrategyType("none"); setStrategyActiveId(indicateurId); setStrategyData(currentData); setStrategySource(ind?.annuaire_annee ? `AS ${ind.annuaire_annee}` : "");
+      // Strategy 4: None
+      setSerie([]); setStrategyType("none"); setStrategyActiveId(indicateurId); setStrategyData(currentData); setStrategySource(ind?.annuaire_annee ? `AS ${ind.annuaire_annee}` : "");
+    } catch (e) {
+      console.error("Error loading indicateur:", e);
+    }
     setLoading(false); document.title = `${ind?.titre_fr||"Tableau"} • Annuaire Statistique`;
   };
 

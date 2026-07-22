@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
+import { annuaires as annuairesApi, thematiques as thematiquesApi } from '@/lib/api';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -39,24 +39,24 @@ const Index = () => {
     }
   }, []);
 
-  const fetchData = async (retry = false) => {
+  const fetchData = async () => {
     setLoading(true);
-    const [annRes, themRes] = await Promise.all([
-      supabase.from("annuaires").select("id, annee").order("annee", { ascending: false }),
-      supabase.from("thematiques").select("id, nom_fr, code, id_annuaire, nb_indicateurs, tableaux(id)"),
-    ]);
-    if (!retry && (annRes.error?.message?.includes("JWT expired") || themRes.error?.message?.includes("JWT expired"))) {
-      await supabase.auth.signOut(); return fetchData(true);
-    }
-    if (annRes.data && themRes.data) {
-      const withRealCount = themRes.data.map((t: any) => ({ ...t, nb_indicateurs: t.tableaux?.length || 0 }));
+    try {
+      const [annData, themData] = await Promise.all([
+        annuairesApi.getAll('desc'),
+        thematiquesApi.getAll({ include_count: true }),
+      ]);
+      const withRealCount = themData.map((t: any) => ({ ...t, nb_indicateurs: t.tableaux_count || 0 }));
       const annuaireIdsWithData = new Set(withRealCount.filter((t: any) => t.nb_indicateurs > 0).map((t: any) => t.id_annuaire));
-      const filteredAnnuaires = annRes.data.filter((a: Annuaire) => annuaireIdsWithData.has(a.id));
+      const filteredAnnuaires = annData.filter((a: Annuaire) => annuaireIdsWithData.has(a.id));
       setAnnuaires(filteredAnnuaires);
       if (filteredAnnuaires.length > 0) setSelectedAnnuaire(filteredAnnuaires[0].id.toString());
       setThematiques(withRealCount as Thematique[]);
-    } else { if (annRes.data) setAnnuaires(annRes.data); }
-    setLoading(false);
+    } catch (error) {
+      console.error('Erreur lors du chargement des données:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const thematiquesForAnnuaire = useMemo(() => {
