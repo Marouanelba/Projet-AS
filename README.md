@@ -1,73 +1,103 @@
-# Welcome to your Lovable project
+# Annuaire Statistique — Back-office
 
-## Project info
+Application web de gestion et visualisation d'annuaires statistiques. Elle permet d'importer, organiser et consulter des données statistiques structurées par annuaire, thématique et tableau.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Fonctionnalités
 
-## How can I edit this code?
+- Import de métadonnées (annuaires et thématiques) via fichier JSON
+- Import de tableaux statistiques avec données détaillées
+- Visualisation des tableaux avec support bilingue (français / arabe)
+- Construction de graphiques à partir des données
+- Gestion des liaisons entre séries statistiques
+- Export des données
+- Authentification et espace administration
 
-There are several ways of editing your application.
+## Technologies
 
-**Use Lovable**
+- **Frontend** : React 18, TypeScript, Vite
+- **UI** : Tailwind CSS, shadcn/ui, Radix UI
+- **Graphiques** : Recharts
+- **Backend** : Supabase (PostgreSQL, Auth, Edge Functions)
+- **Animations** : Framer Motion
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Prérequis
 
-Changes made via Lovable will be committed automatically to this repo.
+- Node.js (v18+)
+- npm ou bun
 
-**Use your preferred IDE**
+## Installation
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+```bash
+# Cloner le dépôt
+git clone <URL_DU_REPO>
+cd AS
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+# Installer les dépendances
+npm install
 
-Follow these steps:
+# Configurer les variables d'environnement
+cp .env.example .env
+# Remplir les valeurs dans .env avec vos identifiants Supabase
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Lancer le serveur de développement
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Variables d'environnement
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Créer un fichier `.env` à la racine avec :
 
-**Use GitHub Codespaces**
+```
+VITE_SUPABASE_PROJECT_ID="votre_project_id"
+VITE_SUPABASE_PUBLISHABLE_KEY="votre_anon_key"
+VITE_SUPABASE_URL="https://votre_project_id.supabase.co"
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Ces valeurs se trouvent dans le dashboard Supabase : **Settings > API**.
 
-## What technologies are used for this project?
+## Scripts disponibles
 
-This project is built with:
+| Commande | Description |
+|----------|-------------|
+| `npm run dev` | Serveur de développement |
+| `npm run build` | Build de production |
+| `npm run preview` | Prévisualiser le build |
+| `npm run lint` | Vérification ESLint |
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Structure du projet
 
-## How can I deploy this project?
+```
+src/
+├── components/       # Composants React (UI, layouts, modals)
+├── hooks/            # Hooks personnalisés (auth, comparaison...)
+├── integrations/     # Configuration Supabase (client, types)
+├── lib/              # Utilitaires (indicateurs, liaisons, motion)
+├── pages/            # Pages de l'application (admin, public)
+supabase/
+├── functions/        # Edge Functions (import-data)
+├── migrations/       # Migrations SQL
+docs/                 # Documentation (architecture, règles)
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+## Import des données
 
-## Can I connect a custom domain to my Lovable project?
+L'import se fait en deux étapes :
 
-Yes, you can!
+1. **Metadata** : Charger un fichier `metadata.json` qui déclare les annuaires et thématiques
+2. **Tableaux** : Charger les fichiers JSON de tableaux statistiques qui se rattachent aux thématiques existantes
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Déploiement Supabase
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```bash
+# Se connecter
+npx supabase login
+
+# Lier au projet
+npx supabase link --project-ref VOTRE_PROJECT_ID
+
+# Déployer les Edge Functions
+npx supabase functions deploy import-data
+
+# Appliquer les migrations
+npx supabase db push
+```
