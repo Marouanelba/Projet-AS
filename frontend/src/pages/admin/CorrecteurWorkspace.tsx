@@ -52,6 +52,7 @@ interface Tableau {
   notes_fr?: string;
   entetes?: any;
   donnees?: any;
+  merged_cells?: any;
   pdf_url?: string;
   pdf_path?: string;
   annuaire_annee?: string;
@@ -306,6 +307,72 @@ export default function CorrecteurWorkspace() {
     return correctionHistory.some(c => c.type_element === 'cellule' && c.row_index === rIdx && c.col_index === cIdx);
   };
 
+  // Helper functions for Excel column letters and merged cells
+  const colLetterToIdx = (colStr: string): number => {
+    let idx = 0;
+    const str = colStr.toUpperCase();
+    for (let i = 0; i < str.length; i++) {
+      idx = idx * 26 + (str.charCodeAt(i) - 65 + 1);
+    }
+    return idx - 1;
+  };
+
+  const parseMergedCells = (mergedCells: any) => {
+    if (!mergedCells) return [];
+    const list = typeof mergedCells === 'string' ? JSON.parse(mergedCells) : mergedCells;
+    if (!Array.isArray(list)) return [];
+
+    const rules: Array<{ startRow: number; endRow: number; startCol: number; endCol: number; rowspan: number; colspan: number; value?: string }> = [];
+    for (const item of list) {
+      if (!item) continue;
+      const rangeStr = item.range || (typeof item === 'string' ? item : '');
+      if (!rangeStr) continue;
+
+      const match = rangeStr.match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/i);
+      if (!match) continue;
+
+      const startColStr = match[1];
+      const startRowStr = match[2];
+      const endColStr = match[3] || startColStr;
+      const endRowStr = match[4] || startRowStr;
+
+      const startCol = colLetterToIdx(startColStr);
+      const startRow = parseInt(startRowStr, 10) - 1;
+      const endCol = colLetterToIdx(endColStr);
+      const endRow = parseInt(endRowStr, 10) - 1;
+
+      rules.push({
+        startRow,
+        endRow,
+        startCol,
+        endCol,
+        rowspan: endRow - startRow + 1,
+        colspan: endCol - startCol + 1,
+        value: item.value
+      });
+    }
+    return rules;
+  };
+
+  const mergedRules = parseMergedCells(currentTableau?.merged_cells);
+
+  const getMergeInfo = (rIdx: number, cIdx: number) => {
+    const rule = mergedRules.find(
+      m => rIdx >= m.startRow && rIdx <= m.endRow && cIdx >= m.startCol && cIdx <= m.endCol
+    );
+    if (!rule) {
+      return { isTopLeft: true, isMerged: false, rowspan: 1, colspan: 1, value: undefined };
+    }
+    const isTopLeft = rIdx === rule.startRow && cIdx === rule.startCol;
+    return {
+      isTopLeft,
+      isMerged: true,
+      rowspan: rule.rowspan,
+      colspan: rule.colspan,
+      value: rule.value
+    };
+  };
+
   // Parse headers & rows JSON
   const headersList = currentTableau?.entetes
     ? (typeof currentTableau.entetes === 'string' ? JSON.parse(currentTableau.entetes) : currentTableau.entetes)
@@ -508,11 +575,35 @@ export default function CorrecteurWorkspace() {
                         </Button>
                       </div>
 
-                      {currentTableau.notes_fr && (
-                        <div className="p-2 bg-amber-50/60 border border-amber-200/60 rounded-xl text-amber-900 text-[11px] whitespace-pre-line">
-                          <strong>Notes:</strong> {currentTableau.notes_fr}
-                        </div>
-                      )}
+                      {(() => {
+                        const formatNotesText = (notesRaw: any): string => {
+                          if (!notesRaw) return '';
+                          let str = String(notesRaw).trim();
+                          if (str.startsWith('[') || str.startsWith('{')) {
+                            try {
+                              const parsed = JSON.parse(str);
+                              if (Array.isArray(parsed)) {
+                                str = parsed.map(item => typeof item === 'object' ? JSON.stringify(item) : String(item)).join('\n');
+                              } else if (typeof parsed === 'object') {
+                                str = Object.entries(parsed).map(([k, v]) => `${k}: ${v}`).join('\n');
+                              }
+                            } catch (e) {
+                              str = str.replace(/^\[\s*/, '').replace(/\s*\]$/, '').replace(/^"(.*)"$/, '$1');
+                            }
+                          }
+                          str = str.trim();
+                          if (str === '[]' || str === '""' || str === "''") return '';
+                          return str;
+                        };
+
+                        const cleanedNotes = formatNotesText(currentTableau.notes_fr);
+                        if (!cleanedNotes) return null;
+                        return (
+                          <div className="p-2 bg-amber-50/60 border border-amber-200/60 rounded-xl text-amber-900 text-[11px] whitespace-pre-line">
+                            <strong>Notes:</strong> {cleanedNotes}
+                          </div>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
 
@@ -534,14 +625,23 @@ export default function CorrecteurWorkspace() {
                           <thead className="sticky top-0 bg-slate-100 z-10 border-b border-slate-300">
                             {headersList.map((hRow: any[], rIdx: number) => (
                               <tr key={rIdx}>
-                                {hRow.map((cell: any, cIdx: number) => (
-                                  <th
-                                    key={cIdx}
-                                    className="p-2.5 font-bold text-slate-800 border-r border-b border-slate-300 bg-slate-100/90 whitespace-pre-line"
-                                  >
-                                    {String(cell || '')}
-                                  </th>
-                                ))}
+                                {hRow.map((cell: any, cIdx: number) => {
+                                  const mergeInfo = getMergeInfo(rIdx, cIdx);
+                                  if (mergeInfo.isMerged && !mergeInfo.isTopLeft) {
+                                    return null;
+                                  }
+                                  const cellText = String(cell || mergeInfo.value || '');
+                                  return (
+                                    <th
+                                      key={cIdx}
+                                      rowSpan={mergeInfo.rowspan}
+                                      colSpan={mergeInfo.colspan}
+                                      className="p-2.5 font-bold text-slate-800 border-r border-b border-slate-300 bg-slate-100/90 whitespace-pre-line text-center align-middle"
+                                    >
+                                      {cellText}
+                                    </th>
+                                  );
+                                })}
                               </tr>
                             ))}
                           </thead>
