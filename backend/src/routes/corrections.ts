@@ -53,7 +53,7 @@ router.get('/tableaux/:id', async (req: Request, res: Response) => {
 router.post('/tableaux/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   const {
-    type_element, // 'cellule', 'titre_fr', 'titre_ar', 'unite_fr', 'unite_ar', 'notes_fr', 'notes_ar'
+    type_element, // 'cellule', 'entete', 'titre_fr', 'titre_ar', 'unite_fr', 'unite_ar', 'notes_fr', 'notes_ar'
     row_index,
     col_index,
     valeur_corrigee,
@@ -124,6 +124,33 @@ router.post('/tableaux/:id', async (req: Request, res: Response) => {
     } else if (type_element === 'notes_ar') {
       valeur_originale = strOrEmpty(tableau.notes_ar);
       updatedTableFields.notes_ar = strOrEmpty(valeur_corrigee);
+    } else if (type_element === 'entete') {
+      // Modification d'une cellule d'en-tête
+      if (row_index === undefined || col_index === undefined) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'row_index et col_index requis pour un entête' });
+      }
+
+      let entetes = tableau.entetes;
+      if (typeof entetes === 'string') {
+        try { entetes = JSON.parse(entetes); } catch (e) { entetes = []; }
+      }
+      if (!Array.isArray(entetes)) entetes = [];
+
+      if (!entetes[row_index]) {
+        entetes[row_index] = [];
+      }
+
+      valeur_originale = strOrEmpty(entetes[row_index][col_index]);
+      entetes[row_index][col_index] = strOrEmpty(valeur_corrigee);
+
+      // Update entetes in tableaux_data
+      await client.query(
+        `INSERT INTO tableaux_data (id_tableau, entetes, donnees)
+         VALUES ($1, $2::jsonb, '[]'::jsonb)
+         ON CONFLICT (id_tableau) DO UPDATE SET entetes = $2::jsonb, updated_at = NOW()`,
+        [id, JSON.stringify(entetes)]
+      );
     } else {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'type_element invalide' });
