@@ -52,6 +52,7 @@ interface Tableau {
   notes_fr?: string;
   entetes?: any;
   donnees?: any;
+  merged_cells?: any;
   pdf_url?: string;
   pdf_path?: string;
   annuaire_annee?: string;

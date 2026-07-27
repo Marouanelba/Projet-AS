@@ -56,7 +56,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="h-screen flex overflow-hidden">
       {/* Sidebar */}
       <aside className="w-64 bg-sidebar text-sidebar-foreground flex flex-col">
         <div className="p-6 border-b border-sidebar-border">
