@@ -1,7 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { auth, getToken } from '@/lib/api';
 
-interface User {
+interface AuthUser {
   id: number;
   email: string;
   display_name?: string;
@@ -9,8 +9,8 @@ interface User {
 }
 
 interface AuthContextType {
-  user: User | null;
-  session: { token: string } | null;
+  user: AuthUser | null;
+  session: null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -20,78 +20,62 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<{ token: string } | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Au montage, vérifier si un token existe et récupérer le profil
   useEffect(() => {
-    const initAuth = async () => {
-      const token = getToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const { user: userData } = await auth.getMe();
-        const enrichedUser: User = {
-          ...userData,
-          user_metadata: { display_name: userData.display_name },
-        };
-        setUser(enrichedUser);
-        setSession({ token });
-      } catch {
-        // Token invalide ou expiré, nettoyer
-        auth.signOut();
-        setUser(null);
-        setSession(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initAuth();
+    const token = getToken();
+    if (token) {
+      auth.getMe()
+        .then(({ user }) => {
+          setUser({
+            ...user,
+            user_metadata: { display_name: user.display_name },
+          });
+        })
+        .catch(() => {
+          auth.signOut();
+          setUser(null);
+        })
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { user: userData, token } = await auth.login(email, password);
-      const enrichedUser: User = {
-        ...userData,
-        user_metadata: { display_name: userData.display_name },
-      };
-      setUser(enrichedUser);
-      setSession({ token });
+      const data = await auth.login(email, password);
+      setUser({
+        ...data.user,
+        user_metadata: { display_name: data.user.display_name },
+      });
       return { error: null };
-    } catch (error) {
-      return { error: error as Error };
+    } catch (err: any) {
+      return { error: new Error(err.message || 'Erreur de connexion') };
     }
   };
 
   const signUp = async (email: string, password: string) => {
     try {
-      const { user: userData, token } = await auth.register(email, password);
-      const enrichedUser: User = {
-        ...userData,
-        user_metadata: { display_name: userData.display_name },
-      };
-      setUser(enrichedUser);
-      setSession({ token });
+      const data = await auth.register(email, password);
+      setUser({
+        ...data.user,
+        user_metadata: { display_name: data.user.display_name },
+      });
       return { error: null };
-    } catch (error) {
-      return { error: error as Error };
+    } catch (err: any) {
+      return { error: new Error(err.message || "Erreur d'inscription") };
     }
   };
 
-  const signOut = async () => {
+  const handleSignOut = async () => {
     auth.signOut();
     setUser(null);
-    setSession(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, session: null, loading, signIn, signUp, signOut: handleSignOut }}>
       {children}
     </AuthContext.Provider>
   );

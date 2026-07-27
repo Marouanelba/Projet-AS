@@ -89,7 +89,7 @@ const themeIconConfigs: ThemeIconConfig[] = [
   { 
     keywords: ["education", "enseignement", "ecole", "scolaire", "etudiant", "formation"], 
     icon: GraduationCap, 
-    color: "bg-[#58061C]/10 text-[#58061C]" 
+    color: "bg-indigo-500/10 text-indigo-600" 
   },
   
   // Santé
@@ -120,7 +120,7 @@ const themeIconConfigs: ThemeIconConfig[] = [
   { 
     keywords: ["eau", "hydraulique", "irrigation", "assainissement"], 
     icon: Droplets, 
-    color: "bg-[#CFA452]/100/10 text-[#9a6e2e]" 
+    color: "bg-cyan-500/10 text-cyan-600" 
   },
   { 
     keywords: ["foret", "environnement", "ecologie", "vert"], 
@@ -212,12 +212,12 @@ const themeIconConfigs: ThemeIconConfig[] = [
   { 
     keywords: ["repartition", "structure", "composition"], 
     icon: PieChart, 
-    color: "bg-[#58061C]/10 text-[#58061C]" 
+    color: "bg-indigo-400/10 text-indigo-500" 
   },
   { 
     keywords: ["evolution", "tendance", "dynamique"], 
     icon: Activity, 
-    color: "bg-[#CFA452]-600/10 text-[#7c5524]" 
+    color: "bg-cyan-600/10 text-cyan-700" 
   },
 ];
 
@@ -243,49 +243,4 @@ export const getThematiqueIcon = (thematiqueName: string): ThemeIconResult => {
   
   // Default
   return { Icon: Database, colorClass: "bg-muted text-muted-foreground" };
-};
-
-
-/**
- * Palette de couleurs fixes pour les badges de thématiques
- * Chaque thématique reçoit une couleur cohérente basée sur un hash de son nom
- */
-const BADGE_COLORS = [
-  "bg-blue-50 text-blue-700 border-blue-200",
-  "bg-emerald-50 text-emerald-700 border-emerald-200",
-  "bg-amber-50 text-amber-700 border-amber-200",
-  "bg-rose-50 text-rose-700 border-rose-200",
-  "bg-violet-50 text-violet-700 border-violet-200",
-  "bg-[#CFA452]/10 text-[#7c5524] border-[#CFA452]/30",
-  "bg-orange-50 text-orange-700 border-orange-200",
-  "bg-teal-50 text-teal-700 border-teal-200",
-  "bg-pink-50 text-pink-700 border-pink-200",
-  "bg-[#58061C]/8 text-[#58061C] border-[#58061C]/20",
-  "bg-lime-50 text-lime-700 border-lime-200",
-  "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
-  "bg-sky-50 text-sky-700 border-sky-200",
-  "bg-red-50 text-red-700 border-red-200",
-  "bg-purple-50 text-purple-700 border-purple-200",
-  "bg-yellow-50 text-yellow-700 border-yellow-200",
-];
-
-// Simple hash function for consistent color assignment
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-/**
- * Retourne les classes CSS de badge coloré pour une thématique donnée.
- * La couleur est déterministe (même thématique = même couleur à chaque fois).
- */
-export const getThematiqueBadgeColor = (thematiqueName: string): string => {
-  const normalized = thematiqueName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-  const index = hashString(normalized) % BADGE_COLORS.length;
-  return BADGE_COLORS[index];
 };

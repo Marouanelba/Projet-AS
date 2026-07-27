@@ -5,7 +5,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
-import RequireAuth from "@/components/RequireAuth";
 import Index from "./pages/Index";
 import Indicateurs from "./pages/Indicateurs";
 import IndicateurPublicDetail from "./pages/IndicateurPublicDetail";
@@ -48,13 +47,13 @@ const App = () => {
               <Route path="/thematique" element={<ThematiqueExplorer />} />
               <Route path="/thematique/tableau/:id" element={<TableauThematiqueDetail />} />
               <Route path="/auth" element={<Auth />} />
-              <Route path="/admin" element={<RequireAuth><IndicateursList /></RequireAuth>} />
-              <Route path="/admin/indicateurs" element={<RequireAuth><IndicateursList /></RequireAuth>} />
-              <Route path="/admin/indicateurs/:id" element={<RequireAuth><IndicateurDetail /></RequireAuth>} />
-              <Route path="/admin/liaisons" element={<RequireAuth><Liaisons /></RequireAuth>} />
-              <Route path="/admin/correcteur" element={<RequireAuth><CorrecteurWorkspace /></RequireAuth>} />
-              <Route path="/admin/import" element={<RequireAuth><ImportData /></RequireAuth>} />
-              <Route path="/admin/parametres" element={<RequireAuth><Parametres /></RequireAuth>} />
+              <Route path="/admin" element={<IndicateursList />} />
+              <Route path="/admin/indicateurs" element={<IndicateursList />} />
+              <Route path="/admin/indicateurs/:id" element={<IndicateurDetail />} />
+              <Route path="/admin/liaisons" element={<Liaisons />} />
+              <Route path="/admin/import" element={<ImportData />} />
+              <Route path="/admin/correcteur" element={<CorrecteurWorkspace />} />
+              <Route path="/admin/parametres" element={<Parametres />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Search, Filter, ChevronRight, Loader2, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Search, Filter, ChevronRight, Loader2 } from 'lucide-react';
 
 interface Annuaire {
   id: number;
@@ -48,6 +48,8 @@ interface IndicateurGroupe {
 // Fonction pour nettoyer le nom de la thématique - utilise la fonction utilitaire
 const cleanThematiqueName = normalizeThematiqueName;
 
+const PAGE_SIZE = 50;
+
 const IndicateursList = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -59,16 +61,11 @@ const IndicateursList = () => {
   const [selectedAnnuaire, setSelectedAnnuaire] = useState<string>('all');
   const [selectedThematique, setSelectedThematique] = useState<string>('all');
   const [page, setPage] = useState(0);
-  const PAGE_SIZE = 50;
 
-  // Applied filters (only on button click)
-  const [appliedSearch, setAppliedSearch] = useState('');
-  const [appliedAnnuaire, setAppliedAnnuaire] = useState<string>('all');
-  const [appliedThematique, setAppliedThematique] = useState<string>('all');
-
-  const hasFilters = searchTerm !== '' || selectedAnnuaire !== 'all' || selectedThematique !== 'all';
-  const applyFilters = () => { setAppliedSearch(searchTerm); setAppliedAnnuaire(selectedAnnuaire); setAppliedThematique(selectedThematique); setPage(0); };
-  const clearFilters = () => { setSearchTerm(''); setSelectedAnnuaire('all'); setSelectedThematique('all'); setAppliedSearch(''); setAppliedAnnuaire('all'); setAppliedThematique('all'); setPage(0); };
+  // Reset page to 0 when filters change
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm, selectedAnnuaire, selectedThematique]);
 
   useEffect(() => {
     fetchData();
@@ -77,42 +74,47 @@ const IndicateursList = () => {
   const fetchData = async () => {
     setLoading(true);
     
-    try {
-      // Fetch all tableaux (paginated - default limit is 1000)
-      const fetchAllTableaux = async () => {
-        const allRows: Indicateur[] = [];
-        let from = 0;
-        const pageSize = 1000;
-        while (true) {
-          const data = await views.tableauxComplets({ order_by: 'id', order_dir: 'ASC', from: from, to: from + pageSize - 1 });
-          if (!data || data.length === 0) break;
-          allRows.push(...(data as Indicateur[]));
-          if (data.length < pageSize) break;
-          from += pageSize;
-        }
-        return allRows;
-      };
-      
-      const [annuairesData, thematiquesData, allTableaux] = await Promise.all([
-        annuairesApi.getAll('desc'),
-        thematiquesApi.getAll({ order: 'code' }),
-        fetchAllTableaux()
-      ]);
+    const fetchAllTableaux = async () => {
+      const allRows: Indicateur[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const data = await views.tableauxComplets({ from, to: from + pageSize - 1 });
+        if (!data || data.length === 0) break;
+        allRows.push(...(data as Indicateur[]));
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return allRows;
+    };
+    
+    const [annuairesData, thematiquesData, allTableaux] = await Promise.all([
+      annuairesApi.getAll('desc'),
+      thematiquesApi.getAll(),
+      fetchAllTableaux()
+    ]);
 
-      setAnnuaires(annuairesData);
-      setThematiques(thematiquesData);
-      setIndicateurs(allTableaux);
-    } catch (error) {
-      console.error('Erreur lors du chargement des données:', error);
-    } finally {
-      setLoading(false);
-    }
+    if (annuairesData) setAnnuaires(annuairesData);
+    if (thematiquesData) setThematiques(thematiquesData);
+    if (allTableaux) setIndicateurs(allTableaux);
+    
+    setLoading(false);
   };
 
-  // Annuaires disponibles — tous les annuaires (pas de filtrage croisé pour permettre les combinaisons)
+  // Annuaires disponibles (filtrés selon thématique sélectionnée)
   const availableAnnuaires = useMemo(() => {
-    return annuaires;
-  }, [annuaires]);
+    if (selectedThematique === 'all') {
+      return annuaires;
+    }
+    // Trouver les thématiques qui correspondent au nom nettoyé sélectionné
+    const selectedCleanName = cleanThematiqueName(
+      thematiques.find(t => t.id.toString() === selectedThematique)?.nom_fr || ''
+    );
+    const matchingThematiqueIds = new Set(
+      thematiques.filter(t => cleanThematiqueName(t.nom_fr) === selectedCleanName).map(t => t.id_annuaire)
+    );
+    return annuaires.filter(a => matchingThematiqueIds.has(a.id));
+  }, [annuaires, selectedThematique, thematiques]);
 
   // Thématiques nettoyées pour le dropdown (regroupées par nom normalisé)
   // Utilise le nom normalisé comme clé, pas l'ID
@@ -132,30 +134,30 @@ const IndicateursList = () => {
   const filteredIndicateurs = useMemo(() => {
     return indicateurs.filter(ind => {
       // Recherche tolérante aux espaces dans le code
-      const searchLower = appliedSearch.toLowerCase().trim();
-      const normalizedSearch = normalizeCode(appliedSearch);
+      const searchLower = searchTerm.toLowerCase().trim();
+      const normalizedSearch = normalizeCode(searchTerm);
       
-      const matchesSearch = appliedSearch === '' ||
+      const matchesSearch = searchTerm === '' ||
         cleanIndicateurTitle(ind.titre_fr).toLowerCase().includes(searchLower) ||
         ind.titre_fr.toLowerCase().includes(searchLower) ||
         normalizeCode(ind.code).includes(normalizedSearch);
       
-      const matchesAnnuaire = appliedAnnuaire === 'all' || 
-        annuaires.find(a => a.id.toString() === appliedAnnuaire)?.annee === ind.annuaire_annee;
+      const matchesAnnuaire = selectedAnnuaire === 'all' || 
+        annuaires.find(a => a.id.toString() === selectedAnnuaire)?.annee === ind.annuaire_annee;
       
       // Filtrer par nom normalisé de thématique (pas par code/ID)
-      const matchesThematique = appliedThematique === 'all' ||
-        cleanThematiqueName(ind.thematique_nom) === appliedThematique;
+      const matchesThematique = selectedThematique === 'all' ||
+        cleanThematiqueName(ind.thematique_nom) === selectedThematique;
 
       return matchesSearch && matchesAnnuaire && matchesThematique;
     });
-  }, [indicateurs, appliedSearch, appliedAnnuaire, appliedThematique, annuaires]);
+  }, [indicateurs, searchTerm, selectedAnnuaire, selectedThematique, annuaires]);
 
   // Regrouper les indicateurs par titre nettoyé
   // Si un AS spécifique est sélectionné, on utilise le code comme clé pour éviter les fusions incorrectes
   const groupedIndicateurs = useMemo(() => {
     const groups = new Map<string, IndicateurGroupe>();
-    const isSpecificAS = appliedAnnuaire !== 'all';
+    const isSpecificAS = selectedAnnuaire !== 'all';
     
     filteredIndicateurs.forEach(ind => {
       const cleanTitle = cleanIndicateurTitle(ind.titre_fr);
@@ -207,34 +209,26 @@ const IndicateursList = () => {
 
   return (
     <AdminLayout>
-      <div className="p-4 sm:p-6 lg:p-8">
-        {/* Header */}
-        <div className="mb-8 p-6 bg-gradient-to-r from-[#58061C]/5 via-white to-[#CFA452]/5 border border-[#58061C]/15 rounded-2xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center shadow-md shadow-[#58061C]/15">
-                  <List className="h-5 w-5 text-white" />
-                </div>
-                Liste des tableaux
-              </h1>
-              <p className="text-slate-600 text-sm mt-2 ml-[52px]">
-                {indicateurs.length} tableaux au total • {groupedIndicateurs.length} tableaux uniques
-              </p>
-            </div>
-            {!loading && (
-              <Badge variant="secondary" className="text-sm px-4 py-2 rounded-xl bg-[#58061C]/8 text-[#58061C] border border-[#58061C]/20 font-bold">
-                {groupedIndicateurs.length} affiché{groupedIndicateurs.length > 1 ? 's' : ''}
-              </Badge>
-            )}
+      <div className="p-8">
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Liste des tableaux</h1>
+            <p className="text-muted-foreground mt-1">
+              {indicateurs.length} tableaux au total • {groupedIndicateurs.length} tableaux uniques
+            </p>
           </div>
+          {!loading && (
+            <Badge variant="secondary" className="text-lg px-4 py-2">
+              {groupedIndicateurs.length} affiché{groupedIndicateurs.length > 1 ? 's' : ''}
+            </Badge>
+          )}
         </div>
 
         {/* Filters */}
-        <Card className="mb-6 rounded-2xl border-2 border-slate-200 shadow-sm">
-          <CardHeader className="pb-4 bg-slate-50/50 rounded-t-2xl border-b border-slate-100">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Filter className="h-4 w-4 text-[#58061C]" />
+        <Card className="mb-6">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Filter className="h-5 w-5" />
               Filtres
             </CardTitle>
           </CardHeader>
@@ -243,15 +237,15 @@ const IndicateursList = () => {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Rechercher (ex: 2-1, population...)"
+                  placeholder="Rechercher (ex: 2-1, 2 - 1, population...)"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 rounded-xl border-slate-300 bg-white shadow-sm"
+                  className="pl-10"
                 />
               </div>
               
               <Select value={selectedAnnuaire} onValueChange={setSelectedAnnuaire}>
-                <SelectTrigger className="rounded-xl border-slate-300 bg-white shadow-sm">
+                <SelectTrigger>
                   <SelectValue placeholder="Tous les annuaires" />
                 </SelectTrigger>
                 <SelectContent>
@@ -265,7 +259,7 @@ const IndicateursList = () => {
               </Select>
 
               <Select value={selectedThematique} onValueChange={setSelectedThematique}>
-                <SelectTrigger className="rounded-xl border-slate-300 bg-white shadow-sm">
+                <SelectTrigger>
                   <SelectValue placeholder="Toutes les thématiques" />
                 </SelectTrigger>
                 <SelectContent>
@@ -278,19 +272,11 @@ const IndicateursList = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2 mt-4">
-              <Button onClick={applyFilters} size="sm" className="rounded-xl bg-gradient-to-r from-[#58061C] to-[#3B0211] hover:from-[#6b0a24] hover:to-[#58061C]digo-500 hover:to-[#58061C] text-white px-6 shadow-sm shadow-[#58061C]/15" disabled={!hasFilters}>
-                Appliquer
-              </Button>
-              <Button onClick={clearFilters} variant="outline" size="sm" className="rounded-xl text-slate-600 hover:text-red-600 hover:border-red-300 hover:bg-red-50 border-slate-300" disabled={!hasFilters}>
-                Effacer
-              </Button>
-            </div>
           </CardContent>
         </Card>
 
         {/* Table */}
-        <Card className="border-2 border-slate-200 shadow-sm rounded-2xl">
+        <Card>
           <CardContent className="p-0">
             {loading ? (
               <div className="flex items-center justify-center py-12">
@@ -308,25 +294,25 @@ const IndicateursList = () => {
               const totalPages = Math.ceil(totalItems / PAGE_SIZE);
               const paginated = groupedIndicateurs.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
               return (
-                <>
-                {/* Pagination top */}
-                {totalPages > 1 && (
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-3 border-b border-slate-200 bg-slate-50/50">
-                    <p className="text-sm font-medium text-slate-600">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalItems)} sur <span className="text-[#58061C] font-bold">{totalItems}</span></p>
-                    <div className="flex items-center gap-3">
-                      <Button variant="outline" size="sm" onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="rounded-xl border-slate-300 px-4 hover:bg-[#58061C]/8 hover:border-[#58061C]/30 hover:text-[#58061C] disabled:opacity-40">← Précédent</Button>
-                      <span className="text-sm font-bold text-slate-800 bg-slate-100 px-3 py-1 rounded-lg">{page + 1} / {totalPages}</span>
-                      <Button variant="outline" size="sm" onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="rounded-xl border-slate-300 px-4 hover:bg-[#58061C]/8 hover:border-[#58061C]/30 hover:text-[#58061C] disabled:opacity-40">Suivant →</Button>
+                <div className="flex flex-col">
+                  {/* Pagination top */}
+                  {totalPages > 1 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-3 border-b border-slate-200 bg-slate-50/50">
+                      <p className="text-sm font-medium text-slate-600">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalItems)} sur <span className="text-foreground font-bold">{totalItems}</span></p>
+                      <div className="flex items-center gap-3">
+                        <Button variant="outline" size="sm" onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="px-4">← Précédent</Button>
+                        <span className="text-sm font-bold text-slate-800 bg-slate-100 px-3 py-1 rounded-lg">{page + 1} / {totalPages}</span>
+                        <Button variant="outline" size="sm" onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="px-4">Suivant →</Button>
+                      </div>
                     </div>
-                  </div>
-                )}
-                <div className="overflow-x-auto">
-                <Table>
+                  )}
+                  
+                  <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-100 border-b-2 border-slate-200">
-                    <TableHead className="font-bold text-slate-700">Titre</TableHead>
-                    <TableHead className="w-64 font-bold text-slate-700">Présent dans</TableHead>
-                    <TableHead className="w-48 font-bold text-slate-700">Thématique</TableHead>
+                  <TableRow>
+                    <TableHead>Titre</TableHead>
+                    <TableHead className="w-64">Présent dans</TableHead>
+                    <TableHead className="w-48">Thématique</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -334,10 +320,10 @@ const IndicateursList = () => {
                   {paginated.map((groupe) => (
                     <TableRow 
                       key={groupe.cleanTitle}
-                      className="cursor-pointer hover:bg-[#58061C]/8/50 transition-colors"
+                      className="cursor-pointer hover:bg-muted/50"
                       onClick={() => navigate(`/admin/indicateurs/${groupe.occurrences[0].id}`)}
                     >
-                      <TableCell className="font-medium text-slate-900">
+                      <TableCell className="font-medium">
                         {groupe.cleanTitle}
                       </TableCell>
                       <TableCell>
@@ -346,7 +332,7 @@ const IndicateursList = () => {
                             <Badge 
                               key={occ.id} 
                               variant="outline" 
-                              className="text-xs cursor-pointer hover:bg-[#58061C] hover:text-white border-[#58061C]/20 text-[#58061C] transition-colors"
+                              className="text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 navigate(`/admin/indicateurs/${occ.id}`);
@@ -358,31 +344,31 @@ const IndicateursList = () => {
                           ))}
                         </div>
                       </TableCell>
-                      <TableCell className="text-slate-600 font-medium">
+                      <TableCell className="text-muted-foreground">
                         {groupe.cleanThematique}
                       </TableCell>
                       <TableCell>
-                        <ChevronRight className="h-4 w-4 text-slate-400" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-              </div>
+              
               {/* Pagination bottom */}
               {totalPages > 1 && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-3 border-t-2 border-slate-200">
-                  <p className="text-sm font-medium text-slate-600">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalItems)} sur <span className="text-[#58061C] font-bold">{totalItems}</span></p>
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/50 rounded-b-xl">
+                  <p className="text-sm font-medium text-slate-600">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalItems)} sur <span className="text-foreground font-bold">{totalItems}</span></p>
                   <div className="flex items-center gap-3">
-                    <Button variant="outline" size="sm" onClick={() => { setPage(Math.max(0, page - 1)); window.scrollTo({ top: 200, behavior: 'smooth' }); }} disabled={page === 0} className="rounded-xl border-slate-300 px-4 hover:bg-[#58061C]/8 hover:border-[#58061C]/30 hover:text-[#58061C] disabled:opacity-40">← Précédent</Button>
+                    <Button variant="outline" size="sm" onClick={() => { setPage(Math.max(0, page - 1)); window.scrollTo({ top: 200, behavior: 'smooth' }); }} disabled={page === 0} className="px-4">← Précédent</Button>
                     <span className="text-sm font-bold text-slate-800 bg-slate-100 px-3 py-1 rounded-lg">{page + 1} / {totalPages}</span>
-                    <Button variant="outline" size="sm" onClick={() => { setPage(Math.min(totalPages - 1, page + 1)); window.scrollTo({ top: 200, behavior: 'smooth' }); }} disabled={page >= totalPages - 1} className="rounded-xl border-slate-300 px-4 hover:bg-[#58061C]/8 hover:border-[#58061C]/30 hover:text-[#58061C] disabled:opacity-40">Suivant →</Button>
+                    <Button variant="outline" size="sm" onClick={() => { setPage(Math.min(totalPages - 1, page + 1)); window.scrollTo({ top: 200, behavior: 'smooth' }); }} disabled={page >= totalPages - 1} className="px-4">Suivant →</Button>
                   </div>
                 </div>
               )}
-              </>
-              );
-            })()}
+            </div>
+          );
+        })()}
           </CardContent>
         </Card>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { tableaux as tableauxApi, thematiques as thematiquesApi, annuaires as annuairesApi, tableauxIndices, tableauxData, views, fusion as fusionApi } from '@/lib/api';
+import { tableaux as tableauxApi, thematiques as thematiquesApi, tableauxIndices, tableauxData, annuaires as annuairesApi, views, fusion, liaisons as liaisonsApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,7 +48,6 @@ interface IndicateurData {
   id: number;
   entetes: any;
   donnees: any;
-  merged_cells?: any[];
 }
 
 interface SerieIndicateur {
@@ -79,174 +78,132 @@ const IndicateurDetail = () => {
   const fetchIndicateur = async (indicateurId: number) => {
     setLoading(true);
 
-    try {
-      const ind = await tableauxApi.getById(indicateurId);
+    const ind = await tableauxApi.getById(indicateurId);
 
-      if (!ind) {
-        setLoading(false);
-        return;
-      }
-
-      setIndicateur(ind);
-
-      const [themData, indicesData, dataResult] = await Promise.all([
-        thematiquesApi.getById(ind.id_thematique).catch(() => null),
-        tableauxIndices.getByTableau(indicateurId),
-        tableauxData.getByTableau(indicateurId)
-      ]);
-
-      let currentAnnee = '';
-      if (themData) {
-        setThematique(themData);
-        try {
-          const annuaireData = await annuairesApi.getById(themData.id_annuaire);
-          if (annuaireData) {
-            setAnnuaire(annuaireData);
-            currentAnnee = annuaireData.annee;
-          }
-        } catch {
-          // Annuaire non trouvé
-        }
-      }
-
-      setIndices(indicesData || []);
-      if (dataResult) {
-        setData({
-          id: dataResult.id,
-          entetes: dataResult.entetes,
-          donnees: dataResult.donnees,
-          merged_cells: dataResult.merged_cells || []
-        });
-      } else {
-        setData(null);
-      }
-
-      // Récupérer la série temporelle pour cet indicateur
-      await fetchSerieTemporelle(indicateurId, dataResult, currentAnnee);
-    } catch {
-      // Indicateur non trouvé
+    if (!ind) {
+      setLoading(false);
+      return;
     }
+
+    setIndicateur(ind);
+
+    const [themData, indicesData, dataResult] = await Promise.all([
+      thematiquesApi.getById(ind.id_thematique),
+      tableauxIndices.getByTableau(indicateurId),
+      tableauxData.getByTableau(indicateurId)
+    ]);
+
+    let currentAnnee = '';
+    if (themData) {
+      setThematique(themData);
+      const annuaireData = await annuairesApi.getById(themData.id_annuaire);
+      if (annuaireData) {
+        setAnnuaire(annuaireData);
+        currentAnnee = annuaireData.annee;
+      }
+    }
+
+    if (indicesData) setIndices(indicesData);
+    if (dataResult) setData(dataResult);
+
+    // Récupérer la série temporelle pour cet indicateur
+    await fetchSerieTemporelle(indicateurId, dataResult, currentAnnee);
 
     setLoading(false);
   };
 
   // Fonction pour récupérer et parcourir la série temporelle
   const fetchSerieTemporelle = async (indicateurId: number, currentData: IndicateurData | null, currentAnnee: string) => {
-    try {
-      // Récupérer toutes les liaisons où cet indicateur est impliqué
-      const liaisons = await views.seriesTemporelles(0, 99999);
+    // Récupérer toutes les liaisons où cet indicateur est impliqué
+    const allLiaisons = await views.seriesTemporelles();
 
-      if (!liaisons || liaisons.length === 0) {
-        // Pas de liaison, afficher les données originales
-        setDisplayData(currentData ? {
-          id: currentData.id,
-          entetes: currentData.entetes,
-          donnees: currentData.donnees,
-          merged_cells: currentData.merged_cells || []
-        } : null);
-        setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
-        setSerieIndicateurs([]);
-        return;
-      }
-
-      // Trouver toutes les liaisons impliquant cet indicateur
-      const relatedLiaisons = liaisons.filter(
-        l => l.source_id === indicateurId || l.cible_id === indicateurId
-      );
-
-      if (relatedLiaisons.length === 0) {
-        // Pas de liaison pour cet indicateur
-        setDisplayData(currentData ? {
-          id: currentData.id,
-          entetes: currentData.entetes,
-          donnees: currentData.donnees,
-          merged_cells: currentData.merged_cells || []
-        } : null);
-        setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
-        setSerieIndicateurs([]);
-        return;
-      }
-
-      // Vérifier si c'est une liaison de type "fusionne"
-      const fusionneLink = relatedLiaisons.find(l => l.type_liaison === 'fusionne');
-      
-      if (fusionneLink) {
-        // Récupérer les données fusionnées depuis tableaux_fusion
-        try {
-          const fusionData = await fusionApi.getByLiaison(fusionneLink.liaison_id);
-          
-          if (fusionData) {
-            setDisplayData({
-              id: fusionData.id,
-              entetes: fusionData.entetes_fusionnees as any,
-              donnees: fusionData.donnees_fusionnees as any
-            });
-            setDisplaySource(`Fusion ${fusionneLink.source_annee} + ${fusionneLink.cible_annee}`);
-            
-            // Construire la liste des indicateurs de la série
-            setSerieIndicateurs([
-              {
-                id: fusionneLink.source_id!,
-                code: fusionneLink.source_code!,
-                titre_fr: fusionneLink.source_titre!,
-                annee: fusionneLink.source_annee!,
-                type_liaison: 'fusionne'
-              },
-              {
-                id: fusionneLink.cible_id!,
-                code: fusionneLink.cible_code!,
-                titre_fr: fusionneLink.cible_titre!,
-                annee: fusionneLink.cible_annee!,
-                type_liaison: 'fusionne'
-              }
-            ]);
-            return;
-          }
-        } catch {
-          // Fusion data non trouvée, on continue
-        }
-      }
-
-      // Vérifier si c'est une liaison de type "remplace"
-      const hasRemplaceLink = relatedLiaisons.some(l => l.type_liaison === 'remplace');
-
-      if (hasRemplaceLink) {
-        // Construire la chaîne complète des indicateurs liés par "remplace"
-        const chainedIndicators = await buildIndicatorChain(indicateurId, liaisons);
-        setSerieIndicateurs(chainedIndicators);
-
-        // Trouver l'indicateur avec l'année la plus récente dans la chaîne
-        if (chainedIndicators.length > 0) {
-          const mostRecent = chainedIndicators.reduce((prev, curr) => 
-            curr.annee > prev.annee ? curr : prev
-          );
-
-          // Récupérer les données de l'indicateur le plus récent
-          if (mostRecent.id !== indicateurId) {
-            try {
-              const recentData = await tableauxData.getByTableau(mostRecent.id);
-
-              if (recentData) {
-                setDisplayData(recentData);
-                setDisplaySource(`AS ${mostRecent.annee} (série temporelle - remplace)`);
-                return;
-              }
-            } catch {
-              // Données non trouvées
-            }
-          }
-        }
-      }
-
-      // Par défaut, afficher les données originales
-      setDisplayData(currentData);
-      setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
-    } catch {
-      // Erreur lors de la récupération des séries, afficher les données originales
+    if (!allLiaisons || allLiaisons.length === 0) {
+      // Pas de liaison, afficher les données originales
       setDisplayData(currentData);
       setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
       setSerieIndicateurs([]);
+      return;
     }
+
+    // Trouver toutes les liaisons impliquant cet indicateur
+    const relatedLiaisons = allLiaisons.filter(
+      l => l.source_id === indicateurId || l.cible_id === indicateurId
+    );
+
+    if (relatedLiaisons.length === 0) {
+      // Pas de liaison pour cet indicateur
+      setDisplayData(currentData);
+      setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
+      setSerieIndicateurs([]);
+      return;
+    }
+
+    // Vérifier si c'est une liaison de type "fusionne"
+    const fusionneLink = relatedLiaisons.find(l => l.type_liaison === 'fusionne');
+    
+    if (fusionneLink) {
+      // Récupérer les données fusionnées depuis tableaux_fusion
+      const fusionData = await fusion.getByLiaison(fusionneLink.liaison_id);
+      
+      if (fusionData) {
+        setDisplayData({
+          id: fusionData.id,
+          entetes: fusionData.entetes_fusionnees as any,
+          donnees: fusionData.donnees_fusionnees as any
+        });
+        setDisplaySource(`Fusion ${fusionneLink.source_annee} + ${fusionneLink.cible_annee}`);
+        
+        // Construire la liste des indicateurs de la série
+        setSerieIndicateurs([
+          {
+            id: fusionneLink.source_id!,
+            code: fusionneLink.source_code!,
+            titre_fr: fusionneLink.source_titre!,
+            annee: fusionneLink.source_annee!,
+            type_liaison: 'fusionne'
+          },
+          {
+            id: fusionneLink.cible_id!,
+            code: fusionneLink.cible_code!,
+            titre_fr: fusionneLink.cible_titre!,
+            annee: fusionneLink.cible_annee!,
+            type_liaison: 'fusionne'
+          }
+        ]);
+        return;
+      }
+    }
+
+    // Vérifier si c'est une liaison de type "remplace"
+    const hasRemplaceLink = relatedLiaisons.some(l => l.type_liaison === 'remplace');
+
+    if (hasRemplaceLink) {
+      // Construire la chaîne complète des indicateurs liés par "remplace"
+      const chainedIndicators = await buildIndicatorChain(indicateurId, allLiaisons);
+      setSerieIndicateurs(chainedIndicators);
+
+      // Trouver l'indicateur avec l'année la plus récente dans la chaîne
+      if (chainedIndicators.length > 0) {
+        const mostRecent = chainedIndicators.reduce((prev, curr) => 
+          curr.annee > prev.annee ? curr : prev
+        );
+
+        // Récupérer les données de l'indicateur le plus récent
+        if (mostRecent.id !== indicateurId) {
+          const recentData = await tableauxData.getByTableau(mostRecent.id);
+
+          if (recentData) {
+            setDisplayData(recentData);
+            setDisplaySource(`AS ${mostRecent.annee} (série temporelle - remplace)`);
+            return;
+          }
+        }
+      }
+    }
+
+    // Par défaut, afficher les données originales
+    setDisplayData(currentData);
+    setDisplaySource(currentAnnee ? `AS ${currentAnnee}` : '');
   };
 
   // Construire la chaîne d'indicateurs liés
@@ -255,16 +212,14 @@ const IndicateurDetail = () => {
     const chain: SerieIndicateur[] = [];
     const queue = [startId];
 
-    // Récupérer tous les tableaux complets une seule fois
-    const allTableaux = await views.tableauxComplets({ from: 0, to: 99999 });
-
     while (queue.length > 0) {
       const currentId = queue.shift()!;
       if (visited.has(currentId)) continue;
       visited.add(currentId);
 
-      // Chercher les infos de cet indicateur dans la liste complète
-      const indInfo = allTableaux.find((t: any) => t.id === currentId);
+      // Récupérer les infos de cet indicateur
+      const indInfoArr = await views.tableauxComplets({ select: 'id, code, titre_fr, annuaire_annee' });
+      const indInfo = indInfoArr?.find((r: any) => r.id === currentId) || null;
 
       if (indInfo) {
         chain.push({
@@ -304,83 +259,12 @@ const IndicateurDetail = () => {
     });
   };
 
-  const parseCellCoord = (cell: string) => {
-    const match = cell.match(/^([A-Z]+)([0-9]+)$/i);
-    if (!match) return { row: 0, col: 0 };
-    const letters = match[1].toUpperCase();
-    const rowNum = parseInt(match[2], 10);
-    
-    let col = 0;
-    for (let i = 0; i < letters.length; i++) {
-      col = col * 26 + (letters.charCodeAt(i) - 65 + 1);
-    }
-    col = col - 1;
-    const row = rowNum - 1;
-    return { row, col };
-  };
-
-  const parseExcelRange = (range: string) => {
-    const parts = range.split(':');
-    const start = parseCellCoord(parts[0]);
-    const end = parts[1] ? parseCellCoord(parts[1]) : start;
-    return {
-      startRow: start.row,
-      startCol: start.col,
-      endRow: end.row,
-      endCol: end.col
-    };
-  };
-
   const renderTableCell = (cell: any, isHeader = false) => {
     if (typeof cell === 'string') {
       return highlightIndices(cell);
     }
-    if (cell === null || cell === undefined) return '';
-    return String(cell);
+    return String(cell ?? '');
   };
-
-  const notesList = (() => {
-    if (!indicateur?.notes_fr) return [];
-    const val = indicateur.notes_fr.trim();
-    if (val.startsWith("[") && val.endsWith("]")) {
-      try {
-        const parsed = JSON.parse(val);
-        if (Array.isArray(parsed)) return parsed;
-      } catch (e) {}
-    }
-    return [indicateur.notes_fr];
-  })();
-
-  const mergeGrid = (() => {
-    const grid: Record<string, { hidden: boolean; rowSpan?: number; colSpan?: number }> = {};
-    if (!displayData?.merged_cells || displayData.merged_cells.length === 0) return grid;
-
-    displayData.merged_cells.forEach(({ range }: any) => {
-      try {
-        const { startRow, startCol, endRow, endCol } = parseExcelRange(range);
-        for (let r = startRow; r <= endRow; r++) {
-          for (let c = startCol; c <= endCol; c++) {
-            const key = `${r}-${c}`;
-            if (r === startRow && c === startCol) {
-              grid[key] = {
-                hidden: false,
-                rowSpan: endRow - startRow + 1,
-                colSpan: endCol - startCol + 1
-              };
-            } else {
-              grid[key] = {
-                hidden: true
-              };
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Error parsing range:", range, err);
-      }
-    });
-
-    return grid;
-  })();
 
   if (loading) {
     return (
@@ -410,30 +294,30 @@ const IndicateurDetail = () => {
 
   return (
     <AdminLayout>
-      <div className="p-6 lg:p-8 max-w-6xl">
+      <div className="p-8 max-w-6xl">
         <Button 
           variant="ghost" 
           onClick={() => navigate('/admin/indicateurs')}
-          className="mb-6 gap-2 text-slate-600"
+          className="mb-6"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4 mr-2" />
           Retour à la liste
         </Button>
 
         {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <Badge variant="outline" className="font-mono text-xs">
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <Badge variant="secondary" className="font-mono text-lg px-3 py-1">
               {indicateur.code}
             </Badge>
-            {annuaire && <Badge variant="secondary" className="text-xs">{annuaire.annee}</Badge>}
+            {annuaire && <Badge variant="outline">{annuaire.annee}</Badge>}
             {thematique && (
-              <Badge className="text-xs bg-[#58061C]/8 text-[#58061C] border border-[#58061C]/20">
+              <Badge className="bg-primary/10 text-primary hover:bg-primary/20">
                 {thematique.nom_fr}
               </Badge>
             )}
           </div>
-          <h1 className="text-xl font-bold text-slate-900 mb-2">
+          <h1 className="text-2xl font-bold text-foreground mb-2">
             {indicateur.titre_fr}
           </h1>
           {indicateur.titre_ar && (
@@ -472,13 +356,11 @@ const IndicateurDetail = () => {
               </div>
             )}
 
-            {(notesList.length > 0 || indicateur.notes_ar) && (
+            {(indicateur.notes_fr || indicateur.notes_ar) && (
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground mb-1">Notes</h4>
-                <div className="highlight-notes space-y-1">
-                  {notesList.map((note, idx) => (
-                    <p key={idx}>{highlightIndices(note)}</p>
-                  ))}
+                <div className="highlight-notes">
+                  {highlightIndices(indicateur.notes_fr)}
                   {indicateur.notes_ar && <div className="mt-1" dir="rtl">{indicateur.notes_ar}</div>}
                 </div>
               </div>
@@ -590,48 +472,31 @@ const IndicateurDetail = () => {
                   <thead>
                     {Array.isArray(displayData.entetes) && displayData.entetes.map((row: any[], rowIndex: number) => (
                       <tr key={`header-${rowIndex}`} className="bg-muted">
-                        {Array.isArray(row) && row.map((cell, cellIndex) => {
-                          const mergeKey = `${rowIndex}-${cellIndex}`;
-                          const merge = mergeGrid[mergeKey];
-                          if (merge?.hidden) return null;
-                          return (
-                            <th 
-                              key={`header-${rowIndex}-${cellIndex}`}
-                              rowSpan={merge?.rowSpan}
-                              colSpan={merge?.colSpan}
-                              className="border border-border px-3 py-2 text-left font-medium"
-                            >
-                              {renderTableCell(cell, true)}
-                            </th>
-                          );
-                        })}
+                        {Array.isArray(row) && row.map((cell, cellIndex) => (
+                          <th 
+                            key={`header-${rowIndex}-${cellIndex}`}
+                            className="border border-border px-3 py-2 text-left font-medium"
+                          >
+                            {renderTableCell(cell, true)}
+                          </th>
+                        ))}
                       </tr>
                     ))}
                   </thead>
                   {/* Données */}
                   <tbody>
-                    {Array.isArray(displayData.donnees) && displayData.donnees.map((row: any[], rowIndex: number) => {
-                      const globalRowIdx = (displayData.entetes?.length || 0) + rowIndex;
-                      return (
-                        <tr key={`data-${rowIndex}`} className="hover:bg-muted/50">
-                          {Array.isArray(row) && row.map((cell, cellIndex) => {
-                            const mergeKey = `${globalRowIdx}-${cellIndex}`;
-                            const merge = mergeGrid[mergeKey];
-                            if (merge?.hidden) return null;
-                            return (
-                              <td 
-                                key={`data-${rowIndex}-${cellIndex}`}
-                                rowSpan={merge?.rowSpan}
-                                colSpan={merge?.colSpan}
-                                className="border border-border px-3 py-2"
-                              >
-                                {renderTableCell(cell)}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
+                    {Array.isArray(displayData.donnees) && displayData.donnees.map((row: any[], rowIndex: number) => (
+                      <tr key={`data-${rowIndex}`} className="hover:bg-muted/50">
+                        {Array.isArray(row) && row.map((cell, cellIndex) => (
+                          <td 
+                            key={`data-${rowIndex}-${cellIndex}`}
+                            className="border border-border px-3 py-2"
+                          >
+                            {renderTableCell(cell)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

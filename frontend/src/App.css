@@ -1,36 +1,42 @@
-/* ShadCN UI CSS Variables - Palette Bordeaux & Or */
-:root {
-  --background: 0 0% 96%;
-  --foreground: 340 90% 8%;
-  --card: 0 0% 100%;
-  --card-foreground: 340 90% 8%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 340 90% 8%;
-  --primary: 340 85% 22%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 40 10% 94%;
-  --secondary-foreground: 340 90% 8%;
-  --muted: 40 10% 94%;
-  --muted-foreground: 340 10% 45%;
-  --accent: 38 55% 57%;
-  --accent-foreground: 340 90% 8%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 40 15% 88%;
-  --input: 40 15% 88%;
-  --ring: 340 85% 22%;
-  --radius: 0.75rem;
-  --sidebar-background: 0 0% 100%;
-  --sidebar-foreground: 340 90% 8%;
-  --sidebar-primary: 340 85% 22%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 40 10% 94%;
-  --sidebar-accent-foreground: 340 90% 8%;
-  --sidebar-border: 40 15% 88%;
-  --sidebar-ring: 340 85% 22%;
-  --chart-1: 340 85% 22%;
-  --chart-2: 38 55% 57%;
-  --chart-3: 340 90% 14%;
-  --chart-4: 38 60% 70%;
-  --chart-5: 0 72% 51%;
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
 }
