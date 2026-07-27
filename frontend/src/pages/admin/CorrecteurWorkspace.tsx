@@ -104,6 +104,23 @@ export default function CorrecteurWorkspace() {
     commentaire: ''
   });
 
+  // Header cell edit state
+  const [editHeaderModal, setEditHeaderModal] = useState<{
+    open: boolean;
+    row_index: number;
+    col_index: number;
+    valeur_originale: string;
+    valeur_corrigee: string;
+    commentaire: string;
+  }>({
+    open: false,
+    row_index: -1,
+    col_index: -1,
+    valeur_originale: '',
+    valeur_corrigee: '',
+    commentaire: ''
+  });
+
   // Metadata edit state
   const [editMetaModal, setEditMetaModal] = useState<{
     open: boolean;
@@ -234,6 +251,19 @@ export default function CorrecteurWorkspace() {
     });
   };
 
+  // Handle header cell click to edit
+  const handleHeaderClick = (rIdx: number, cIdx: number, val: any) => {
+    const origStr = val !== null && val !== undefined ? String(val) : '';
+    setEditHeaderModal({
+      open: true,
+      row_index: rIdx,
+      col_index: cIdx,
+      valeur_originale: origStr,
+      valeur_corrigee: origStr,
+      commentaire: ''
+    });
+  };
+
   // Submit Cell Correction
   const handleSaveCellCorrection = async () => {
     if (!currentTableau) return;
@@ -254,6 +284,31 @@ export default function CorrecteurWorkspace() {
       toast.success("Correction enregistrée avec traçabilité !");
     } catch (err: any) {
       toast.error("Erreur lors de la sauvegarde de la correction", { description: err.message });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Submit Header Correction
+  const handleSaveHeaderCorrection = async () => {
+    if (!currentTableau) return;
+    try {
+      setSubmitting(true);
+      const res = await corrections.saveCorrection(currentTableau.id, {
+        type_element: 'entete',
+        row_index: editHeaderModal.row_index,
+        col_index: editHeaderModal.col_index,
+        valeur_corrigee: editHeaderModal.valeur_corrigee,
+        commentaire: editHeaderModal.commentaire,
+        user_display_name: 'Correcteur'
+      });
+
+      setCurrentTableau(res.tableau);
+      setCorrectionHistory(prev => [res.correction, ...prev]);
+      setEditHeaderModal(prev => ({ ...prev, open: false }));
+      toast.success("En-tête corrigé avec traçabilité !");
+    } catch (err: any) {
+      toast.error("Erreur lors de la sauvegarde de l'en-tête", { description: err.message });
     } finally {
       setSubmitting(false);
     }
@@ -305,6 +360,79 @@ export default function CorrecteurWorkspace() {
   const isCellCorrected = (rIdx: number, cIdx: number) => {
     return correctionHistory.some(c => c.type_element === 'cellule' && c.row_index === rIdx && c.col_index === cIdx);
   };
+
+
+  // Check if a header cell has been corrected
+  const isHeaderCorrected = (rIdx: number, cIdx: number) => {
+    return correctionHistory.some(c => c.type_element === 'entete' && c.row_index === rIdx && c.col_index === cIdx);
+  };
+
+  // Helper functions for Excel column letters and merged cells
+  const colLetterToIdx = (colStr: string): number => {
+    let idx = 0;
+    const str = colStr.toUpperCase();
+    for (let i = 0; i < str.length; i++) {
+      idx = idx * 26 + (str.charCodeAt(i) - 65 + 1);
+    }
+    return idx - 1;
+  };
+
+  const parseMergedCells = (mergedCells: any) => {
+    if (!mergedCells) return [];
+    const list = typeof mergedCells === 'string' ? JSON.parse(mergedCells) : mergedCells;
+    if (!Array.isArray(list)) return [];
+
+    const rules: Array<{ startRow: number; endRow: number; startCol: number; endCol: number; rowspan: number; colspan: number; value?: string }> = [];
+    for (const item of list) {
+      if (!item) continue;
+      const rangeStr = item.range || (typeof item === 'string' ? item : '');
+      if (!rangeStr) continue;
+
+      const match = rangeStr.match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/i);
+      if (!match) continue;
+
+      const startColStr = match[1];
+      const startRowStr = match[2];
+      const endColStr = match[3] || startColStr;
+      const endRowStr = match[4] || startRowStr;
+
+      const startCol = colLetterToIdx(startColStr);
+      const startRow = parseInt(startRowStr, 10) - 1;
+      const endCol = colLetterToIdx(endColStr);
+      const endRow = parseInt(endRowStr, 10) - 1;
+
+      rules.push({
+        startRow,
+        endRow,
+        startCol,
+        endCol,
+        rowspan: endRow - startRow + 1,
+        colspan: endCol - startCol + 1,
+        value: item.value
+      });
+    }
+    return rules;
+  };
+
+  const mergedRules = parseMergedCells(currentTableau?.merged_cells);
+
+  const getMergeInfo = (rIdx: number, cIdx: number) => {
+    const rule = mergedRules.find(
+      m => rIdx >= m.startRow && rIdx <= m.endRow && cIdx >= m.startCol && cIdx <= m.endCol
+    );
+    if (!rule) {
+      return { isTopLeft: true, isMerged: false, rowspan: 1, colspan: 1, value: undefined };
+    }
+    const isTopLeft = rIdx === rule.startRow && cIdx === rule.startCol;
+    return {
+      isTopLeft,
+      isMerged: true,
+      rowspan: rule.rowspan,
+      colspan: rule.colspan,
+      value: rule.value
+    };
+  };
+
 
   // Parse headers & rows JSON
   const headersList = currentTableau?.entetes
@@ -534,14 +662,35 @@ export default function CorrecteurWorkspace() {
                           <thead className="sticky top-0 bg-slate-100 z-10 border-b border-slate-300">
                             {headersList.map((hRow: any[], rIdx: number) => (
                               <tr key={rIdx}>
-                                {hRow.map((cell: any, cIdx: number) => (
-                                  <th
-                                    key={cIdx}
-                                    className="p-2.5 font-bold text-slate-800 border-r border-b border-slate-300 bg-slate-100/90 whitespace-pre-line"
-                                  >
-                                    {String(cell || '')}
-                                  </th>
-                                ))}
+
+                                {hRow.map((cell: any, cIdx: number) => {
+                                  const mergeInfo = getMergeInfo(rIdx, cIdx);
+                                  if (mergeInfo.isMerged && !mergeInfo.isTopLeft) {
+                                    return null;
+                                  }
+                                  const cellText = String(cell || mergeInfo.value || '');
+                                  const corrected = isHeaderCorrected(rIdx, cIdx);
+                                  return (
+                                    <th
+                                      key={cIdx}
+                                      rowSpan={mergeInfo.rowspan}
+                                      colSpan={mergeInfo.colspan}
+                                      onClick={() => handleHeaderClick(rIdx, cIdx, cellText)}
+                                      className={`p-2.5 font-bold text-slate-800 border-r border-b border-slate-300 whitespace-pre-line text-center align-middle cursor-pointer transition-all ${
+                                        corrected
+                                          ? 'bg-emerald-100/80 border-emerald-400 text-emerald-950 shadow-inner'
+                                          : 'bg-slate-100/90 hover:bg-[#58061C]/10'
+                                      }`}
+                                      title="Cliquer pour corriger cet en-tête"
+                                    >
+                                      <div className="flex items-center justify-center gap-1">
+                                        <span>{cellText}</span>
+                                        {corrected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></span>}
+                                      </div>
+                                    </th>
+                                  );
+                                })}
+
                               </tr>
                             ))}
                           </thead>
@@ -604,6 +753,8 @@ export default function CorrecteurWorkspace() {
                               <span className="text-[#58061C]">
                                 {c.type_element === 'cellule'
                                   ? `Cellule [Rang ${c.row_index! + 1}, Col ${c.col_index! + 1}]`
+                                  : c.type_element === 'entete'
+                                  ? `En-tête [Rang ${c.row_index! + 1}, Col ${c.col_index! + 1}]`
                                   : `Élément: ${c.type_element}`}
                               </span>
                               <span className="text-[11px] font-normal text-slate-500">
@@ -736,6 +887,58 @@ export default function CorrecteurWorkspace() {
                 Annuler
               </Button>
               <Button size="sm" onClick={handleSaveCellCorrection} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#58061C] hover:bg-[#420415] text-white">
+                {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Enregistrer la correction
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal: Edit Header Cell */}
+        <Dialog open={editHeaderModal.open} onOpenChange={(open) => setEditHeaderModal(prev => ({ ...prev, open }))}>
+          <DialogContent className="max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Edit3 className="h-4 w-4 text-[#58061C]" />
+                Corriger l'en-tête [Rang {editHeaderModal.row_index + 1}, Col {editHeaderModal.col_index + 1}]
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-500">Valeur originale de l'en-tête</Label>
+                <div className="p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 line-through">
+                  {editHeaderModal.valeur_originale || '(Vide)'}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">Nouvelle valeur corrigée *</Label>
+                <Input
+                  value={editHeaderModal.valeur_corrigee}
+                  onChange={(e) => setEditHeaderModal(prev => ({ ...prev, valeur_corrigee: e.target.value }))}
+                  placeholder="Saisissez la valeur exacte de l'en-tête..."
+                  className="rounded-xl"
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">Commentaire de correction (Optionnel)</Label>
+                <Textarea
+                  value={editHeaderModal.commentaire}
+                  onChange={(e) => setEditHeaderModal(prev => ({ ...prev, commentaire: e.target.value }))}
+                  placeholder="Ex: Nom de colonne mal extrait du PDF..."
+                  className="rounded-xl text-xs h-20"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditHeaderModal(prev => ({ ...prev, open: false }))} className="rounded-xl text-xs">
+                Annuler
+              </Button>
+              <Button size="sm" onClick={handleSaveHeaderCorrection} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#58061C] hover:bg-[#420415] text-white">
                 {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 Enregistrer la correction
               </Button>
