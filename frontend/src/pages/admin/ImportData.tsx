@@ -313,11 +313,11 @@ const ImportData = () => {
     <AdminLayout>
       <div className="p-4 sm:p-6 lg:p-8 max-w-5xl">
         {/* Header */}
-        <div className="mb-8 p-6 bg-gradient-to-r from-[#58061C]/5 via-white to-[#CFA452]/5 border border-[#58061C]/15 rounded-2xl">
+        <div className="mb-8 p-6 bg-gradient-to-r from-[#EA580C]/5 via-white to-[#CFA452]/5 border border-[#EA580C]/15 rounded-2xl">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center shadow-md shadow-[#58061C]/15">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center shadow-md shadow-[#EA580C]/15">
                   <Upload className="h-5 w-5 text-white" />
                 </div>
                 Import de données
@@ -353,10 +353,10 @@ const ImportData = () => {
 
         <Tabs defaultValue="import" className="space-y-6">
           <TabsList className="bg-white border-2 border-slate-200 rounded-xl p-1.5 h-auto shadow-sm">
-            <TabsTrigger value="import" className="rounded-lg px-5 py-2.5 text-sm font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#58061C] data-[state=active]:to-[#3B0211] data-[state=active]:text-white data-[state=active]:font-bold data-[state=active]:shadow-md transition-all gap-2">
+            <TabsTrigger value="import" className="rounded-lg px-5 py-2.5 text-sm font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#EA580C] data-[state=active]:to-[#C2410C] data-[state=active]:text-white data-[state=active]:font-bold data-[state=active]:shadow-md transition-all gap-2">
               <Upload className="h-4 w-4" /> Import
             </TabsTrigger>
-            <TabsTrigger value="format" className="rounded-lg px-5 py-2.5 text-sm font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#58061C] data-[state=active]:to-[#3B0211] data-[state=active]:text-white data-[state=active]:font-bold data-[state=active]:shadow-md transition-all gap-2">
+            <TabsTrigger value="format" className="rounded-lg px-5 py-2.5 text-sm font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#EA580C] data-[state=active]:to-[#C2410C] data-[state=active]:text-white data-[state=active]:font-bold data-[state=active]:shadow-md transition-all gap-2">
               <FileJson className="h-4 w-4" /> Format des fichiers
             </TabsTrigger>
           </TabsList>
@@ -365,10 +365,10 @@ const ImportData = () => {
             {/* Upload zones */}
             <div className="grid md:grid-cols-2 gap-5">
               {/* Metadata upload */}
-              <div className="border-2 border-dashed border-[#58061C]/20 rounded-2xl p-6 bg-gradient-to-b from-[#58061C]/8/50 to-white hover:border-[#58061C]/50 hover:shadow-md transition-all group">
+              <div className="border-2 border-dashed border-[#EA580C]/20 rounded-2xl p-6 bg-gradient-to-b from-[#EA580C]/8/50 to-white hover:border-[#EA580C]/50 hover:shadow-md transition-all group">
                 <div className="text-center space-y-4">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#58061C]/15 to-[#58061C]/8 border border-[#58061C]/20 flex items-center justify-center mx-auto group-hover:scale-105 transition-transform">
-                    <File className="h-7 w-7 text-[#58061C]" />
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#EA580C]/15 to-[#EA580C]/8 border border-[#EA580C]/20 flex items-center justify-center mx-auto group-hover:scale-105 transition-transform">
+                    <File className="h-7 w-7 text-[#EA580C]" />
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-slate-900">1. Metadata</h3>
@@ -378,7 +378,7 @@ const ImportData = () => {
                   </div>
                   <input type="file" accept=".json" ref={fileInputRef} onChange={handleSingleFile} className="hidden" />
                   <Button onClick={() => fileInputRef.current?.click()} disabled={loading}
-                    className="rounded-xl bg-gradient-to-r from-[#58061C] to-[#3B0211] hover:from-[#6b0a24] hover:to-[#58061C]digo-500 hover:to-[#58061C] text-white shadow-sm shadow-[#58061C]/15 gap-2 w-full">
+                    className="rounded-xl bg-gradient-to-r from-[#EA580C] to-[#C2410C] hover:from-[#C2410C] hover:to-[#EA580C] text-white shadow-sm shadow-[#EA580C]/15 gap-2 w-full">
                     <Upload className="h-4 w-4" /> Charger metadata.json
                   </Button>
                 </div>
@@ -415,15 +415,15 @@ const ImportData = () => {
 
             {/* Progress */}
             {loading && (
-              <div className="border-2 border-[#58061C]/20 rounded-2xl p-5 bg-[#58061C]/8/50">
+              <div className="border-2 border-[#EA580C]/20 rounded-2xl p-5 bg-[#EA580C]/8/50">
                 <div className="flex items-center gap-4 mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#58061C]/15 border border-[#58061C]/20 flex items-center justify-center shrink-0">
-                    <Loader2 className="h-5 w-5 animate-spin text-[#58061C]" />
+                  <div className="w-10 h-10 rounded-xl bg-[#EA580C]/15 border border-[#EA580C]/20 flex items-center justify-center shrink-0">
+                    <Loader2 className="h-5 w-5 animate-spin text-[#EA580C]" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-bold text-slate-900">Import en cours...</span>
-                      <span className="text-sm font-bold text-[#58061C]">{progress}%</span>
+                      <span className="text-sm font-bold text-[#EA580C]">{progress}%</span>
                     </div>
                     <Progress value={progress} className="h-2.5 rounded-full" />
                   </div>
@@ -484,8 +484,8 @@ const ImportData = () => {
 
           <TabsContent value="format" className="space-y-6">
             {/* Info banner */}
-            <div className="flex items-start gap-3 p-4 bg-[#58061C]/8 border-2 border-[#58061C]/20 rounded-xl">
-              <FileJson className="h-5 w-5 text-[#58061C] mt-0.5 shrink-0" />
+            <div className="flex items-start gap-3 p-4 bg-[#EA580C]/8 border-2 border-[#EA580C]/20 rounded-xl">
+              <FileJson className="h-5 w-5 text-[#EA580C] mt-0.5 shrink-0" />
               <div className="text-sm">
                 <p className="font-bold text-slate-900 mb-1">Ordre d'import recommandé</p>
                 <ol className="list-decimal list-inside space-y-0.5 text-slate-700">
@@ -497,12 +497,12 @@ const ImportData = () => {
 
             {/* Metadata format */}
             <div className="border-2 border-slate-200 rounded-2xl overflow-hidden">
-              <div className="bg-[#58061C]/8 px-5 py-3 border-b border-[#58061C]/15 flex items-center justify-between">
+              <div className="bg-[#EA580C]/8 px-5 py-3 border-b border-[#EA580C]/15 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#58061C] text-white">TYPE 1</span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#EA580C] text-white">TYPE 1</span>
                   <span className="text-sm font-bold text-slate-900">metadata.json</span>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => downloadTemplate('metadata')} className="rounded-lg text-xs gap-1.5 border-[#58061C]/20 text-[#58061C] hover:bg-[#58061C]/15">
+                <Button variant="outline" size="sm" onClick={() => downloadTemplate('metadata')} className="rounded-lg text-xs gap-1.5 border-[#EA580C]/20 text-[#EA580C] hover:bg-[#EA580C]/15">
                   <Download className="h-3.5 w-3.5" /> Télécharger l'exemple
                 </Button>
               </div>
@@ -519,7 +519,7 @@ const ImportData = () => {
               <div className="bg-sky-50 px-5 py-3 border-b border-sky-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-600 text-white">TYPE 2</span>
-                  <span className="text-sm font-bold text-slate-900">Chapitre_X_...json</span>
+                  <span className="text-sm font-bold text-slate-900">Chapitre_X_Y.json</span>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => downloadTemplate('chapitre')} className="rounded-lg text-xs gap-1.5 border-sky-200 text-sky-700 hover:bg-sky-100">
                   <Download className="h-3.5 w-3.5" /> Télécharger l'exemple

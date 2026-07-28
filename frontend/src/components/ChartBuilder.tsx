@@ -259,7 +259,7 @@ export default function ChartBuilder({ entetes, donnees }: ChartBuilderProps) {
       {/* Header + Toggle */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center">
             <ChartTypeIcon className="h-4 w-4 text-white" />
           </div>
           <div>
@@ -271,7 +271,7 @@ export default function ChartBuilder({ entetes, donnees }: ChartBuilderProps) {
           variant="outline"
           size="sm"
           onClick={() => setIsConfigOpen(!isConfigOpen)}
-          className={`gap-2 rounded-xl border-2 transition-all ${isConfigOpen ? 'border-[#58061C]/30 bg-[#58061C]/8 text-[#58061C]' : 'border-slate-200'}`}
+          className={`gap-2 rounded-xl border-2 transition-all ${isConfigOpen ? 'border-[#EA580C]/30 bg-[#EA580C]/8 text-[#EA580C]' : 'border-slate-200'}`}
         >
           <Settings2 className="h-4 w-4" />
           {isConfigOpen ? "Masquer" : "Configurer"}
@@ -280,7 +280,7 @@ export default function ChartBuilder({ entetes, donnees }: ChartBuilderProps) {
 
       {/* Configuration panel */}
       {isConfigOpen && (
-        <div className="bg-white border-2 border-[#58061C]/15 rounded-2xl p-6 space-y-6">
+        <div className="bg-white border-2 border-[#EA580C]/15 rounded-2xl p-6 space-y-6">
           {/* Type de graphique */}
           <div className="space-y-3">
             <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Type de graphique</Label>
@@ -327,9 +327,9 @@ export default function ChartBuilder({ entetes, donnees }: ChartBuilderProps) {
             <div className="flex items-center justify-between">
               <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Colonnes à afficher
-                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#58061C]/15 text-[#58061C]">{selectedColumns.length}</span>
+                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EA580C]/15 text-[#EA580C]">{selectedColumns.length}</span>
               </Label>
-              <button onClick={toggleAllColumns} className="text-xs font-semibold text-[#58061C] hover:text-[#58061C]">
+              <button onClick={toggleAllColumns} className="text-xs font-semibold text-[#EA580C] hover:text-[#EA580C]">
                 {selectedColumns.length === numericColumns.length ? "Tout désélectionner" : "Tout sélectionner"}
               </button>
             </div>
@@ -356,7 +356,7 @@ export default function ChartBuilder({ entetes, donnees }: ChartBuilderProps) {
                 Lignes à afficher
                 <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">{selectedRows.length}</span>
               </Label>
-              <button onClick={toggleAllRows} className="text-xs font-semibold text-[#58061C] hover:text-[#58061C]">
+              <button onClick={toggleAllRows} className="text-xs font-semibold text-[#EA580C] hover:text-[#EA580C]">
                 {selectedRows.length === rowLabels.length ? "Tout désélectionner" : "Tout sélectionner"}
               </button>
             </div>
@@ -364,7 +364,7 @@ export default function ChartBuilder({ entetes, donnees }: ChartBuilderProps) {
               {rowLabels.map((row) => (
                 <label key={row.index}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all text-sm font-medium ${
-                    selectedRows.includes(row.index) ? 'border-[#58061C]/50 bg-[#58061C]/8 text-[#58061C]' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    selectedRows.includes(row.index) ? 'border-[#EA580C]/50 bg-[#EA580C]/8 text-[#EA580C]' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                   }`}>
                   <Checkbox checked={selectedRows.includes(row.index)} onCheckedChange={() => toggleRow(row.index)} />
                   <span className="truncate max-w-[180px]">{row.label}</span>
@@ -510,10 +510,10 @@ export default function ChartBuilder({ entetes, donnees }: ChartBuilderProps) {
         {/* Boutons d'export */}
         {chartData.length > 0 && selectedColumns.length > 0 && (
           <div className="flex flex-wrap gap-3 justify-end">
-            <Button variant="outline" size="sm" onClick={() => exportAsImage("png")} className="gap-2 rounded-xl border-2 border-slate-200 hover:border-[#58061C]/30 hover:bg-[#58061C]/8">
+            <Button variant="outline" size="sm" onClick={() => exportAsImage("png")} className="gap-2 rounded-xl border-2 border-slate-200 hover:border-[#EA580C]/30 hover:bg-[#EA580C]/8">
               <Download className="h-4 w-4" /> PNG
             </Button>
-            <Button variant="outline" size="sm" onClick={() => exportAsImage("jpeg")} className="gap-2 rounded-xl border-2 border-slate-200 hover:border-[#58061C]/30 hover:bg-[#58061C]/8">
+            <Button variant="outline" size="sm" onClick={() => exportAsImage("jpeg")} className="gap-2 rounded-xl border-2 border-slate-200 hover:border-[#EA580C]/30 hover:bg-[#EA580C]/8">
               <Download className="h-4 w-4" /> JPEG
             </Button>
           </div>

@@ -914,9 +914,9 @@ const Liaisons = () => {
     <AdminLayout>
       <div className="p-4 sm:p-6 lg:p-8">
         {/* Header with gradient accent */}
-        <div className="mb-8 p-6 bg-gradient-to-r from-[#58061C]/5 via-white to-[#CFA452]/5 border border-[#58061C]/15 rounded-2xl">
+        <div className="mb-8 p-6 bg-gradient-to-r from-[#EA580C]/5 via-white to-[#CFA452]/5 border border-[#EA580C]/15 rounded-2xl">
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center shadow-md shadow-[#58061C]/15">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center shadow-md shadow-[#EA580C]/15">
               <Link2 className="h-5 w-5 text-white" />
             </div>
             Liaisons & Séries temporelles
@@ -928,7 +928,7 @@ const Liaisons = () => {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-white border-2 border-slate-200 rounded-2xl p-1.5 h-auto shadow-sm flex-wrap gap-1">
-            <TabsTrigger value="orphelins" className="gap-1.5 rounded-xl px-3 py-2.5 text-xs sm:text-sm sm:px-5 sm:py-3 font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#58061C] data-[state=active]:to-[#3B0211] data-[state=active]:text-white data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:shadow-[#58061C]/15 transition-all">
+            <TabsTrigger value="orphelins" className="gap-1.5 rounded-xl px-3 py-2.5 text-xs sm:text-sm sm:px-5 sm:py-3 font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#EA580C] data-[state=active]:to-[#C2410C] data-[state=active]:text-white data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:shadow-[#EA580C]/15 transition-all">
               <AlertCircle className="h-4 w-4" />
               <span className="hidden sm:inline">Orphelins</span> ({filteredOrphelins.length})
             </TabsTrigger>
@@ -951,7 +951,7 @@ const Liaisons = () => {
             <Card className="border-2 border-slate-200 shadow-sm rounded-2xl">
               <CardHeader className="bg-slate-50/50 border-b border-slate-100 rounded-t-2xl">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <div className="w-2 h-6 rounded-full bg-[#58061C]"></div>
+                  <div className="w-2 h-6 rounded-full bg-[#EA580C]"></div>
                   Tableaux sans liaison
                 </CardTitle>
                 <CardDescription>
@@ -996,7 +996,7 @@ const Liaisons = () => {
                       </SelectContent>
                     </Select>
                     <div className="flex gap-2">
-                      <Button onClick={applyOrphelinFilters} size="sm" className="rounded-xl bg-gradient-to-r from-[#58061C] to-[#3B0211] hover:from-[#6b0a24] hover:to-[#58061C]digo-500 hover:to-[#58061C] text-white px-5 flex-1 shadow-sm shadow-[#58061C]/15"
+                      <Button onClick={applyOrphelinFilters} size="sm" className="rounded-xl bg-gradient-to-r from-[#EA580C] to-[#C2410C] hover:from-[#C2410C] hover:to-[#EA580C] text-white px-5 flex-1 shadow-sm shadow-[#EA580C]/15"
                         disabled={!orphelinThematique && !orphelinAnnee && orphelinStatut === 'all'}>
                         Appliquer
                       </Button>
@@ -1038,11 +1038,11 @@ const Liaisons = () => {
                     <p className="text-xs text-slate-500 mb-3">{totalOrphelins} résultat{totalOrphelins > 1 ? 's' : ''} — page {orphelinPage + 1}/{totalOrphelinPages}</p>
                     {totalOrphelinPages > 1 && (
                       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4 pb-4 border-b-2 border-slate-200">
-                        <p className="text-sm font-medium text-slate-600">{orphelinPage * ORPHELIN_PAGE_SIZE + 1}–{Math.min((orphelinPage + 1) * ORPHELIN_PAGE_SIZE, totalOrphelins)} sur <span className="text-[#58061C] font-bold">{totalOrphelins}</span></p>
+                        <p className="text-sm font-medium text-slate-600">{orphelinPage * ORPHELIN_PAGE_SIZE + 1}–{Math.min((orphelinPage + 1) * ORPHELIN_PAGE_SIZE, totalOrphelins)} sur <span className="text-[#EA580C] font-bold">{totalOrphelins}</span></p>
                         <div className="flex items-center gap-3">
-                          <Button variant="outline" size="sm" onClick={() => { setOrphelinPage(Math.max(0, orphelinPage - 1)); }} disabled={orphelinPage === 0} className="rounded-xl border-slate-300 px-4 hover:bg-[#58061C]/8 hover:border-[#58061C]/30 hover:text-[#58061C] disabled:opacity-40">← Précédent</Button>
+                          <Button variant="outline" size="sm" onClick={() => { setOrphelinPage(Math.max(0, orphelinPage - 1)); }} disabled={orphelinPage === 0} className="rounded-xl border-slate-300 px-4 hover:bg-[#EA580C]/8 hover:border-[#EA580C]/30 hover:text-[#EA580C] disabled:opacity-40">← Précédent</Button>
                           <span className="text-sm font-bold text-slate-800 bg-slate-100 px-3 py-1 rounded-lg">{orphelinPage + 1} / {totalOrphelinPages}</span>
-                          <Button variant="outline" size="sm" onClick={() => { setOrphelinPage(Math.min(totalOrphelinPages - 1, orphelinPage + 1)); }} disabled={orphelinPage >= totalOrphelinPages - 1} className="rounded-xl border-slate-300 px-4 hover:bg-[#58061C]/8 hover:border-[#58061C]/30 hover:text-[#58061C] disabled:opacity-40">Suivant →</Button>
+                          <Button variant="outline" size="sm" onClick={() => { setOrphelinPage(Math.min(totalOrphelinPages - 1, orphelinPage + 1)); }} disabled={orphelinPage >= totalOrphelinPages - 1} className="rounded-xl border-slate-300 px-4 hover:bg-[#EA580C]/8 hover:border-[#EA580C]/30 hover:text-[#EA580C] disabled:opacity-40">Suivant →</Button>
                         </div>
                       </div>
                     )}
@@ -1066,7 +1066,7 @@ const Liaisons = () => {
                           return (
                             <TableRow key={orp.id} className={`hover:bg-slate-50/80 transition-colors ${isInterrompu ? 'bg-red-50/60 border-l-4 border-l-red-400' : 'even:bg-slate-50/30'}`}>
                               <TableCell>
-                                <Badge variant="secondary" className={`font-mono text-xs ${isInterrompu ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-[#58061C]/8 text-[#58061C] border border-[#58061C]/20'}`}>
+                                <Badge variant="secondary" className={`font-mono text-xs ${isInterrompu ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-[#EA580C]/8 text-[#EA580C] border border-[#EA580C]/20'}`}>
                                   {orp.code}
                                 </Badge>
                               </TableCell>
@@ -1074,7 +1074,7 @@ const Liaisons = () => {
                                 {orp.titre_fr}
                               </TableCell>
                               <TableCell>
-                                <Badge variant="outline" className={`text-xs font-medium ${isInterrompu ? 'border-red-300 text-red-600 bg-red-50' : 'border-[#58061C]/20 text-[#58061C] bg-[#58061C]/8'}`}>
+                                <Badge variant="outline" className={`text-xs font-medium ${isInterrompu ? 'border-red-300 text-red-600 bg-red-50' : 'border-[#EA580C]/20 text-[#EA580C] bg-[#EA580C]/8'}`}>
                                   {orp.annee}
                                 </Badge>
                               </TableCell>
@@ -1157,11 +1157,11 @@ const Liaisons = () => {
                   </div>
                   {totalOrphelinPages > 1 && (
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t-2 border-slate-200">
-                      <p className="text-sm font-medium text-slate-600">{orphelinPage * ORPHELIN_PAGE_SIZE + 1}–{Math.min((orphelinPage + 1) * ORPHELIN_PAGE_SIZE, totalOrphelins)} sur <span className="text-[#58061C] font-bold">{totalOrphelins}</span></p>
+                      <p className="text-sm font-medium text-slate-600">{orphelinPage * ORPHELIN_PAGE_SIZE + 1}–{Math.min((orphelinPage + 1) * ORPHELIN_PAGE_SIZE, totalOrphelins)} sur <span className="text-[#EA580C] font-bold">{totalOrphelins}</span></p>
                       <div className="flex items-center gap-3">
-                        <Button variant="outline" size="sm" onClick={() => { setOrphelinPage(Math.max(0, orphelinPage - 1)); window.scrollTo({ top: 200, behavior: 'smooth' }); }} disabled={orphelinPage === 0} className="rounded-xl border-slate-300 px-4 hover:bg-[#58061C]/8 hover:border-[#58061C]/30 hover:text-[#58061C] disabled:opacity-40">← Précédent</Button>
+                        <Button variant="outline" size="sm" onClick={() => { setOrphelinPage(Math.max(0, orphelinPage - 1)); window.scrollTo({ top: 200, behavior: 'smooth' }); }} disabled={orphelinPage === 0} className="rounded-xl border-slate-300 px-4 hover:bg-[#EA580C]/8 hover:border-[#EA580C]/30 hover:text-[#EA580C] disabled:opacity-40">← Précédent</Button>
                         <span className="text-sm font-bold text-slate-800 bg-slate-100 px-3 py-1 rounded-lg">{orphelinPage + 1} / {totalOrphelinPages}</span>
-                        <Button variant="outline" size="sm" onClick={() => { setOrphelinPage(Math.min(totalOrphelinPages - 1, orphelinPage + 1)); window.scrollTo({ top: 200, behavior: 'smooth' }); }} disabled={orphelinPage >= totalOrphelinPages - 1} className="rounded-xl border-slate-300 px-4 hover:bg-[#58061C]/8 hover:border-[#58061C]/30 hover:text-[#58061C] disabled:opacity-40">Suivant →</Button>
+                        <Button variant="outline" size="sm" onClick={() => { setOrphelinPage(Math.min(totalOrphelinPages - 1, orphelinPage + 1)); window.scrollTo({ top: 200, behavior: 'smooth' }); }} disabled={orphelinPage >= totalOrphelinPages - 1} className="rounded-xl border-slate-300 px-4 hover:bg-[#EA580C]/8 hover:border-[#EA580C]/30 hover:text-[#EA580C] disabled:opacity-40">Suivant →</Button>
                       </div>
                     </div>
                   )}
@@ -1195,7 +1195,7 @@ const Liaisons = () => {
                     {/* Annuaire source */}
                     <div>
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-[#58061C] text-white text-[10px] flex items-center justify-center font-bold">1</span>
+                        <span className="w-5 h-5 rounded-full bg-[#EA580C] text-white text-[10px] flex items-center justify-center font-bold">1</span>
                         Annuaire source
                       </label>
                       <Select value={suggestionSourceAnnuaire} onValueChange={(val) => { setSuggestionSourceAnnuaire(val); setSuggestionThematique(''); setSuggestionCibleAnnuaire(''); setSuggestions([]); }}>
@@ -1213,7 +1213,7 @@ const Liaisons = () => {
                     {/* Thématique */}
                     <div>
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-[#58061C] text-white text-[10px] flex items-center justify-center font-bold">2</span>
+                        <span className="w-5 h-5 rounded-full bg-[#EA580C] text-white text-[10px] flex items-center justify-center font-bold">2</span>
                         Thématique
                       </label>
                       <Select value={suggestionThematique} onValueChange={(val) => { setSuggestionThematique(val); setSuggestionCibleAnnuaire(''); setSuggestions([]); }} disabled={!suggestionSourceAnnuaire}>
@@ -1231,7 +1231,7 @@ const Liaisons = () => {
                     {/* Annuaire Cible */}
                     <div>
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-[#58061C] text-white text-[10px] flex items-center justify-center font-bold">3</span>
+                        <span className="w-5 h-5 rounded-full bg-[#EA580C] text-white text-[10px] flex items-center justify-center font-bold">3</span>
                         Annuaire cible
                       </label>
                       <Select value={suggestionCibleAnnuaire} onValueChange={setSuggestionCibleAnnuaire} disabled={!suggestionThematique}>
@@ -1328,7 +1328,7 @@ const Liaisons = () => {
                         {/* Source */}
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <Badge className="shrink-0 bg-[#58061C]/8 text-[#58061C] border border-[#58061C]/20 font-bold">{s.source_annee}</Badge>
+                            <Badge className="shrink-0 bg-[#EA580C]/8 text-[#EA580C] border border-[#EA580C]/20 font-bold">{s.source_annee}</Badge>
                             <span className="font-mono text-xs text-slate-600 shrink-0">{s.source_code}</span>
                           </div>
                           <p className="text-sm text-slate-700 font-medium truncate">{s.source_titre}</p>
@@ -1370,7 +1370,7 @@ const Liaisons = () => {
                             </Button>
                           )}
                           {s.type_liaison === 'fusionne' && fusionConfigured.has(s.liaison_id) && (
-                            <Button variant="ghost" size="icon" className="text-slate-400 hover:text-[#58061C] h-8 w-8 rounded-lg"
+                            <Button variant="ghost" size="icon" className="text-slate-400 hover:text-[#EA580C] h-8 w-8 rounded-lg"
                               onClick={() => handleConfigureFusion(s)} title="Reconfigurer">
                               <Settings2 className="h-4 w-4" />
                             </Button>
@@ -1709,7 +1709,7 @@ const Liaisons = () => {
                 <span className="mx-2 text-slate-400">→</span>
                 <span className="font-medium text-slate-700">{previewSerie.cible_code}</span> ({previewSerie.cible_annee})
                 <span className="mx-2">•</span>
-                <span className={`font-semibold ${previewSerie.type_liaison === 'fusionne' ? 'text-[#58061C]' : previewSerie.type_liaison === 'remplace' ? 'text-violet-600' : 'text-emerald-600'}`}>
+                <span className={`font-semibold ${previewSerie.type_liaison === 'fusionne' ? 'text-[#EA580C]' : previewSerie.type_liaison === 'remplace' ? 'text-violet-600' : 'text-emerald-600'}`}>
                   {previewSerie.type_liaison}
                 </span>
               </DialogDescription>

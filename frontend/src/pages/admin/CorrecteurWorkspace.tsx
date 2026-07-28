@@ -526,15 +526,15 @@ export default function CorrecteurWorkspace() {
       <div className="p-3 sm:p-5 lg:p-6 max-w-[1850px] mx-auto space-y-6">
         
         {/* Header */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 p-6 bg-gradient-to-r from-[#58061C]/10 via-white to-[#CFA452]/10 border border-[#58061C]/15 rounded-2xl shadow-sm">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 p-6 bg-gradient-to-r from-[#EA580C]/10 via-white to-[#CFA452]/10 border border-[#EA580C]/15 rounded-2xl shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center text-white shadow-md shadow-[#58061C]/15">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center text-white shadow-md shadow-[#EA580C]/15">
               <FileSearch className="h-5 w-5" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 Espace Correcteur
-                <Badge variant="outline" className="bg-[#58061C]/10 text-[#58061C] border-[#58061C]/20 text-xs">
+                <Badge variant="outline" className="bg-[#EA580C]/10 text-[#EA580C] border-[#EA580C]/20 text-xs">
                   Double Affichage & Traçabilité
                 </Badge>
               </h1>
@@ -550,13 +550,13 @@ export default function CorrecteurWorkspace() {
           {/* 1. Annuaire (Année) */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-[#58061C]" /> Annuaire (Année)
+              <Calendar className="h-3.5 w-3.5 text-[#EA580C]" /> Annuaire (Année)
             </label>
             <select
               value={selectedAnnee}
               onChange={(e) => setSelectedAnnee(e.target.value)}
               disabled={loadingAnnuaires}
-              className="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#58061C]"
+              className="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#EA580C]"
             >
               {loadingAnnuaires ? (
                 <option>Chargement...</option>
@@ -573,13 +573,13 @@ export default function CorrecteurWorkspace() {
           {/* 2. Thématique (Chapitre) */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-              <Layers className="h-3.5 w-3.5 text-[#58061C]" /> Thématique (Chapitre)
+              <Layers className="h-3.5 w-3.5 text-[#EA580C]" /> Thématique (Chapitre)
             </label>
             <select
               value={selectedThematiqueId}
               onChange={(e) => setSelectedThematiqueId(e.target.value)}
               disabled={loadingThematiques || listThematiques.length === 0}
-              className="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#58061C]"
+              className="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#EA580C]"
             >
               {loadingThematiques ? (
                 <option>Chargement...</option>
@@ -598,13 +598,13 @@ export default function CorrecteurWorkspace() {
           {/* 3. Tableau (Indicateur) */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-              <TableIcon className="h-3.5 w-3.5 text-[#58061C]" /> Tableau (Indicateur)
+              <TableIcon className="h-3.5 w-3.5 text-[#EA580C]" /> Tableau (Indicateur)
             </label>
             <select
               value={selectedTableauId}
               onChange={(e) => setSelectedTableauId(e.target.value)}
               disabled={loadingTableaux || listTableaux.length === 0}
-              className="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#58061C]"
+              className="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#EA580C]"
             >
               {loadingTableaux ? (
                 <option>Chargement...</option>
@@ -624,7 +624,7 @@ export default function CorrecteurWorkspace() {
         {/* Split Screen Layout */}
         {loadingDetails ? (
           <div className="flex flex-col items-center justify-center p-20 bg-white border border-slate-200 rounded-2xl space-y-3">
-            <Loader2 className="h-8 w-8 animate-spin text-[#58061C]" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#EA580C]" />
             <p className="text-sm font-medium text-slate-600">Chargement des données du tableau et de son PDF...</p>
           </div>
         ) : !currentTableau ? (
@@ -668,7 +668,7 @@ export default function CorrecteurWorkspace() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-slate-400 hover:text-[#58061C]"
+                            className="h-7 w-7 text-slate-400 hover:text-[#EA580C]"
                             onClick={() => setEditMetaModal({
                               open: true,
                               type_element: 'titre_fr',
@@ -696,7 +696,7 @@ export default function CorrecteurWorkspace() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 text-[10px] text-[#58061C]"
+                          className="h-6 text-[10px] text-[#EA580C]"
                           onClick={() => setEditMetaModal({
                             open: true,
                             type_element: 'unite_fr',
@@ -722,7 +722,7 @@ export default function CorrecteurWorkspace() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 text-[10px] text-[#58061C] gap-1"
+                              className="h-6 text-[10px] text-[#EA580C] gap-1"
                               onClick={() => setEditNotesModal({
                                 open: true,
                                 notes: notesList.length > 0 ? [...notesList] : [''],
@@ -780,7 +780,7 @@ export default function CorrecteurWorkspace() {
                                       className={`p-2.5 font-bold text-slate-800 border-r border-b border-slate-300 whitespace-pre-line text-center align-middle cursor-pointer transition-all ${
                                         corrected
                                           ? 'bg-emerald-100/80 border-emerald-400 text-emerald-950 shadow-inner'
-                                          : 'bg-slate-100/90 hover:bg-[#58061C]/10'
+                                          : 'bg-slate-100/90 hover:bg-[#EA580C]/10'
                                       }`}
                                       title="Cliquer pour corriger cet en-tête"
                                     >
@@ -810,7 +810,7 @@ export default function CorrecteurWorkspace() {
                                     className={`p-2 border-r border-slate-200 cursor-pointer text-slate-900 transition-all ${
                                       corrected 
                                         ? 'bg-emerald-100/80 font-bold border-emerald-400 text-emerald-950 shadow-inner' 
-                                        : 'hover:bg-[#58061C]/10 hover:font-semibold'
+                                        : 'hover:bg-[#EA580C]/10 hover:font-semibold'
                                     }`}
                                     title="Cliquer pour corriger cette cellule"
                                   >
@@ -834,7 +834,7 @@ export default function CorrecteurWorkspace() {
                   <Card className="rounded-2xl border-slate-200 shadow-sm p-4">
                     <CardHeader className="p-0 mb-4">
                       <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <History className="h-4 w-4 text-[#58061C]" />
+                        <History className="h-4 w-4 text-[#EA580C]" />
                         Journal d'Audit et Traçabilité des Corrections
                       </CardTitle>
                       <CardDescription className="text-xs">
@@ -851,7 +851,7 @@ export default function CorrecteurWorkspace() {
                         correctionHistory.map((c) => (
                           <div key={c.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
                             <div className="flex items-center justify-between font-bold text-slate-900">
-                              <span className="text-[#58061C]">
+                              <span className="text-[#EA580C]">
                                 {c.type_element === 'cellule'
                                   ? `Cellule [Rang ${c.row_index! + 1}, Col ${c.col_index! + 1}]`
                                   : c.type_element === 'entete'
@@ -948,7 +948,7 @@ export default function CorrecteurWorkspace() {
           <DialogContent className="max-w-md rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Edit3 className="h-4 w-4 text-[#58061C]" />
+                <Edit3 className="h-4 w-4 text-[#EA580C]" />
                 Corriger la cellule [Rang {editCellModal.row_index + 1}, Col {editCellModal.col_index + 1}]
               </DialogTitle>
             </DialogHeader>
@@ -987,7 +987,7 @@ export default function CorrecteurWorkspace() {
               <Button variant="outline" size="sm" onClick={() => setEditCellModal(prev => ({ ...prev, open: false }))} className="rounded-xl text-xs">
                 Annuler
               </Button>
-              <Button size="sm" onClick={handleSaveCellCorrection} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#58061C] hover:bg-[#420415] text-white">
+              <Button size="sm" onClick={handleSaveCellCorrection} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#EA580C] hover:bg-[#9A3412] text-white">
                 {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 Enregistrer la correction
               </Button>
@@ -1000,7 +1000,7 @@ export default function CorrecteurWorkspace() {
           <DialogContent className="max-w-md rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Edit3 className="h-4 w-4 text-[#58061C]" />
+                <Edit3 className="h-4 w-4 text-[#EA580C]" />
                 Corriger l'en-tête [Rang {editHeaderModal.row_index + 1}, Col {editHeaderModal.col_index + 1}]
               </DialogTitle>
             </DialogHeader>
@@ -1039,7 +1039,7 @@ export default function CorrecteurWorkspace() {
               <Button variant="outline" size="sm" onClick={() => setEditHeaderModal(prev => ({ ...prev, open: false }))} className="rounded-xl text-xs">
                 Annuler
               </Button>
-              <Button size="sm" onClick={handleSaveHeaderCorrection} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#58061C] hover:bg-[#420415] text-white">
+              <Button size="sm" onClick={handleSaveHeaderCorrection} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#EA580C] hover:bg-[#9A3412] text-white">
                 {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 Enregistrer la correction
               </Button>
@@ -1052,7 +1052,7 @@ export default function CorrecteurWorkspace() {
           <DialogContent className="max-w-md rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Edit3 className="h-4 w-4 text-[#58061C]" />
+                <Edit3 className="h-4 w-4 text-[#EA580C]" />
                 Corriger {editMetaModal.label}
               </DialogTitle>
             </DialogHeader>
@@ -1090,7 +1090,7 @@ export default function CorrecteurWorkspace() {
               <Button variant="outline" size="sm" onClick={() => setEditMetaModal(prev => ({ ...prev, open: false }))} className="rounded-xl text-xs">
                 Annuler
               </Button>
-              <Button size="sm" onClick={handleSaveMetaCorrection} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#58061C] hover:bg-[#420415] text-white">
+              <Button size="sm" onClick={handleSaveMetaCorrection} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#EA580C] hover:bg-[#9A3412] text-white">
                 {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 Sauvegarder
               </Button>
@@ -1161,7 +1161,7 @@ export default function CorrecteurWorkspace() {
               <Button variant="outline" size="sm" onClick={() => setEditNotesModal({ open: false, notes: [], originalNotes: [] })} className="rounded-xl text-xs">
                 Annuler
               </Button>
-              <Button size="sm" onClick={handleSaveNotesCorrection} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#58061C] hover:bg-[#420415] text-white">
+              <Button size="sm" onClick={handleSaveNotesCorrection} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#EA580C] hover:bg-[#9A3412] text-white">
                 {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 Sauvegarder les notes
               </Button>
@@ -1174,7 +1174,7 @@ export default function CorrecteurWorkspace() {
           <DialogContent className="max-w-md rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Link2 className="h-4 w-4 text-[#58061C]" />
+                <Link2 className="h-4 w-4 text-[#EA580C]" />
                 Définir l'URL du PDF pour l'annuaire {selectedAnnee}
               </DialogTitle>
             </DialogHeader>
@@ -1193,7 +1193,7 @@ export default function CorrecteurWorkspace() {
               <Button variant="outline" size="sm" onClick={() => setPdfUrlModal(prev => ({ ...prev, open: false }))} className="rounded-xl text-xs">
                 Annuler
               </Button>
-              <Button size="sm" onClick={handleSavePdfUrl} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#58061C] hover:bg-[#420415] text-white">
+              <Button size="sm" onClick={handleSavePdfUrl} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#EA580C] hover:bg-[#9A3412] text-white">
                 {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 Associer l'URL
               </Button>

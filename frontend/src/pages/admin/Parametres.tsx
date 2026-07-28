@@ -77,9 +77,9 @@ const Parametres = () => {
     <AdminLayout>
       <div className="p-4 sm:p-6 lg:p-8 max-w-2xl">
         {/* Header */}
-        <div className="mb-8 p-6 bg-gradient-to-r from-[#58061C]/5 via-white to-[#CFA452]/5 border border-[#58061C]/15 rounded-2xl">
+        <div className="mb-8 p-6 bg-gradient-to-r from-[#EA580C]/5 via-white to-[#CFA452]/5 border border-[#EA580C]/15 rounded-2xl">
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center shadow-md shadow-[#58061C]/15">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center shadow-md shadow-[#EA580C]/15">
               <User className="h-5 w-5 text-white" />
             </div>
             Paramètres du compte
@@ -92,7 +92,7 @@ const Parametres = () => {
         <div className="space-y-6">
           {/* Info card */}
           <div className="flex items-center gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#58061C] to-[#CFA452] flex items-center justify-center text-white text-lg font-bold shrink-0">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#EA580C] to-[#CFA452] flex items-center justify-center text-white text-lg font-bold shrink-0">
               {(displayName || user?.email || 'U')[0].toUpperCase()}
             </div>
             <div className="min-w-0">
@@ -105,7 +105,7 @@ const Parametres = () => {
           <Card className="border-2 border-slate-200 rounded-2xl">
             <CardHeader className="bg-slate-50 rounded-t-2xl border-b border-slate-100">
               <CardTitle className="text-base flex items-center gap-2">
-                <User className="h-4 w-4 text-[#58061C]" />
+                <User className="h-4 w-4 text-[#EA580C]" />
                 Nom d'utilisateur
               </CardTitle>
             </CardHeader>
@@ -114,9 +114,9 @@ const Parametres = () => {
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nom</label>
                   <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)}
-                    placeholder="Votre nom" className="input-field" />
+                    placeholder="Votre nom" className="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#EA580C]/30 focus:border-[#EA580C] placeholder:text-slate-400" />
                 </div>
-                <Button type="submit" disabled={savingName} className="rounded-xl bg-gradient-to-r from-[#58061C] to-[#3B0211] hover:from-[#6b0a24] hover:to-[#58061C]digo-500 hover:to-[#58061C] text-white shadow-sm shadow-[#58061C]/15 gap-2">
+                <Button type="submit" disabled={savingName} className="rounded-xl bg-gradient-to-r from-[#EA580C] to-[#C2410C] hover:from-[#C2410C] hover:to-[#EA580C] text-white shadow-sm shadow-[#EA580C]/15 gap-2">
                   {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Enregistrer
                 </Button>
@@ -128,7 +128,7 @@ const Parametres = () => {
           <Card className="border-2 border-slate-200 rounded-2xl">
             <CardHeader className="bg-slate-50 rounded-t-2xl border-b border-slate-100">
               <CardTitle className="text-base flex items-center gap-2">
-                <Lock className="h-4 w-4 text-[#58061C]" />
+                <Lock className="h-4 w-4 text-[#EA580C]" />
                 Changer le mot de passe
               </CardTitle>
               <CardDescription>Minimum 6 caractères requis</CardDescription>
@@ -139,7 +139,7 @@ const Parametres = () => {
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mot de passe actuel</label>
                   <div className="relative">
                     <input type={showCurrent ? 'text' : 'password'} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
-                      placeholder="Entrez votre mot de passe actuel" className="input-field !pr-10" />
+                      placeholder="Entrez votre mot de passe actuel" className="w-full h-10 px-3 pr-10 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#EA580C]/30 focus:border-[#EA580C] placeholder:text-slate-400" />
                     <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
                       {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -150,7 +150,7 @@ const Parametres = () => {
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nouveau mot de passe</label>
                   <div className="relative">
                     <input type={showNew ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                      placeholder="••••••••" className="input-field !pr-10" />
+                      placeholder="••••••••" className="w-full h-10 px-3 pr-10 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#EA580C]/30 focus:border-[#EA580C] placeholder:text-slate-400" />
                     <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
                       {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -176,7 +176,7 @@ const Parametres = () => {
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Confirmer le mot de passe</label>
                   <div className="relative">
                     <input type={showConfirm ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••" className="input-field !pr-10" />
+                      placeholder="••••••••" className="w-full h-10 px-3 pr-10 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#EA580C]/30 focus:border-[#EA580C] placeholder:text-slate-400" />
                     <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
                       {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -186,7 +186,7 @@ const Parametres = () => {
                   )}
                 </div>
                 <Button type="submit" disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
-                  className="rounded-xl bg-gradient-to-r from-[#58061C] to-[#3B0211] hover:from-[#6b0a24] hover:to-[#58061C]digo-500 hover:to-[#58061C] text-white shadow-sm shadow-[#58061C]/15 gap-2">
+                  className="rounded-xl bg-gradient-to-r from-[#EA580C] to-[#C2410C] hover:from-[#C2410C] hover:to-[#EA580C] text-white shadow-sm shadow-[#EA580C]/15 gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                   {savingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
                   Mettre à jour le mot de passe
                 </Button>

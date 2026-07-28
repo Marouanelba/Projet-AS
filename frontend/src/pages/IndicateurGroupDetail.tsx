@@ -112,14 +112,14 @@ export default function IndicateurGroupDetail() {
   const displayData = showFusion ? fusionData : selectedData;
   const displaySource = showFusion ? "Série fusionnée" : selectedOccurrence ? `AS ${selectedOccurrence.annuaire_annee}` : "";
 
-  if (loading) return (<div className="min-h-screen bg-slate-50"><nav className="glass-nav sticky top-0 z-50"><div className="section-container flex items-center justify-between h-16"><Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link><Link to="/indicateurs" className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</Link></div></nav><div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-[#58061C]" /></div></div>);
-  if (!titreParam || occurrences.length === 0) return (<div className="min-h-screen bg-slate-50"><nav className="glass-nav sticky top-0 z-50"><div className="section-container flex items-center justify-between h-16"><Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link><Link to="/indicateurs" className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</Link></div></nav><div className="section-container py-16"><div className="glass-strong rounded-2xl p-16 text-center text-slate-600">Aucun tableau trouvé pour "{titreParam}".</div></div></div>);
+  if (loading) return (<div className="min-h-screen bg-slate-50"><nav className="glass-nav sticky top-0 z-50"><div className="section-container flex items-center justify-between h-16"><Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link><Link to="/indicateurs" className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</Link></div></nav><div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-[#EA580C]" /></div></div>);
+  if (!titreParam || occurrences.length === 0) return (<div className="min-h-screen bg-slate-50"><nav className="glass-nav sticky top-0 z-50"><div className="section-container flex items-center justify-between h-16"><Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link><Link to="/indicateurs" className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</Link></div></nav><div className="section-container py-16"><div className="glass-strong rounded-2xl p-16 text-center text-slate-600">Aucun tableau trouvé pour "{titreParam}".</div></div></div>);
 
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="glass-nav sticky top-0 z-50">
         <div className="section-container flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center gap-2 group"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center shadow-lg shadow-[#58061C]/20"><BarChart3 className="h-4 w-4 text-white" /></div><span className="text-lg font-bold text-slate-900 hidden sm:block">Annuaire Stat</span></Link>
+          <Link to="/" className="flex items-center gap-2 group"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center shadow-lg shadow-[#EA580C]/20"><BarChart3 className="h-4 w-4 text-white" /></div><span className="text-lg font-bold text-slate-900 hidden sm:block">Annuaire Stat</span></Link>
           <div className="flex items-center gap-2"><Link to="/" className="btn-ghost text-sm"><Home className="h-4 w-4" /></Link><Link to="/indicateurs" className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Liste</Link></div>
         </div>
       </nav>
@@ -135,11 +135,11 @@ export default function IndicateurGroupDetail() {
         <div className="glass-strong rounded-2xl p-6 mb-8 animate-fade-in-up animate-delay-100">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[#58061C]/8 border border-[#58061C]/15 flex items-center justify-center"><Calendar className="h-4 w-4 text-[#58061C]" /></div>
+              <div className="w-8 h-8 rounded-lg bg-[#EA580C]/8 border border-[#EA580C]/15 flex items-center justify-center"><Calendar className="h-4 w-4 text-[#EA580C]" /></div>
               <h3 className="text-sm font-bold text-slate-900">Sélectionner une année</h3>
             </div>
             {serieExists && fusionData && (
-              <button onClick={handleShowFusion} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${showFusion ? 'bg-[#58061C] text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-[#58061C]/8 hover:text-[#58061C] border border-slate-200'}`}>
+              <button onClick={handleShowFusion} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${showFusion ? 'bg-[#EA580C] text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-[#EA580C]/8 hover:text-[#EA580C] border border-slate-200'}`}>
                 <Layers className="h-3 w-3" /> Série fusionnée
               </button>
             )}
@@ -147,7 +147,7 @@ export default function IndicateurGroupDetail() {
           <div className="flex flex-wrap gap-2">
             {occurrences.map(occ => (
               <button key={occ.id} onClick={() => handleYearSelect(occ.annuaire_annee)}
-                className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${selectedYear === occ.annuaire_annee ? 'bg-[#58061C] text-white shadow-sm shadow-[#58061C]/20' : 'bg-slate-100 text-slate-600 hover:bg-[#58061C]/8 hover:text-[#58061C] border border-slate-200 hover:border-[#58061C]/20'}`}>
+                className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${selectedYear === occ.annuaire_annee ? 'bg-[#EA580C] text-white shadow-sm shadow-[#EA580C]/20' : 'bg-slate-100 text-slate-600 hover:bg-[#EA580C]/8 hover:text-[#EA580C] border border-slate-200 hover:border-[#EA580C]/20'}`}>
                 {occ.annuaire_annee}
               </button>
             ))}
@@ -155,7 +155,7 @@ export default function IndicateurGroupDetail() {
           {selectedOccurrence && (
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-3">
               <span className="text-xs text-slate-500">Affichage: AS {selectedOccurrence.annuaire_annee}</span>
-              <a href={`/indicateurs/${selectedOccurrence.id}`} target="_blank" rel="noopener noreferrer" className="text-xs text-[#58061C] hover:text-[#58061C] font-medium flex items-center gap-1">Détail <ExternalLink className="h-3 w-3" /></a>
+              <a href={`/indicateurs/${selectedOccurrence.id}`} target="_blank" rel="noopener noreferrer" className="text-xs text-[#EA580C] hover:text-[#EA580C] font-medium flex items-center gap-1">Détail <ExternalLink className="h-3 w-3" /></a>
             </div>
           )}
         </div>
@@ -168,7 +168,7 @@ export default function IndicateurGroupDetail() {
                 <TabsTrigger value="tableau" className="rounded-lg px-5 py-2.5 text-sm font-medium gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm"><TableIcon className="h-4 w-4" /> Tableau</TabsTrigger>
                 <TabsTrigger value="graphique" className="rounded-lg px-5 py-2.5 text-sm font-medium gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm"><LineChart className="h-4 w-4" /> Graphique</TabsTrigger>
               </TabsList>
-              <TabsContent value="tableau">{loadingData ? <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-[#58061C]" /></div> : displayData ? <DataTableWithExport entetes={displayData.entetes} donnees={displayData.donnees} displaySource={displaySource} /> : <div className="glass-strong rounded-2xl p-12 text-center text-slate-500">Sélectionnez une année.</div>}</TabsContent>
+              <TabsContent value="tableau">{loadingData ? <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-[#EA580C]" /></div> : displayData ? <DataTableWithExport entetes={displayData.entetes} donnees={displayData.donnees} displaySource={displaySource} /> : <div className="glass-strong rounded-2xl p-12 text-center text-slate-500">Sélectionnez une année.</div>}</TabsContent>
               <TabsContent value="graphique">{displayData ? <ChartBuilder entetes={displayData.entetes} donnees={displayData.donnees} /> : <div className="glass-strong rounded-2xl p-12 text-center text-slate-500">Aucune donnée.</div>}</TabsContent>
             </Tabs>
           </div>

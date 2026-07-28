@@ -176,16 +176,16 @@ export default function IndicateurPublicDetail() {
   if (loading) return (
     <div className="min-h-screen bg-slate-50">
       <nav className="glass-nav sticky top-0 z-50"><div className="section-container flex items-center justify-between h-16">
-        <Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link>
+        <Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link>
         <Link to="/indicateurs" className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</Link>
       </div></nav>
-      <div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-[#58061C]" /></div>
+      <div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-[#EA580C]" /></div>
     </div>
   );
   if (!indicateur) return (
     <div className="min-h-screen bg-slate-50">
       <nav className="glass-nav sticky top-0 z-50"><div className="section-container flex items-center justify-between h-16">
-        <Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link>
+        <Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link>
         <Link to="/indicateurs" className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</Link>
       </div></nav>
       <div className="section-container py-16"><div className="glass-strong rounded-2xl p-16 text-center text-slate-600">Tableau non trouvé.</div></div>
@@ -199,13 +199,13 @@ export default function IndicateurPublicDetail() {
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
         <div className="section-container flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center shadow-lg shadow-[#58061C]/20 group-hover:shadow-[0_0_30px_rgba(88,6,28,0.2)] transition-shadow">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center shadow-lg shadow-[#EA580C]/20 group-hover:shadow-[0_0_30px_rgba(88,6,28,0.2)] transition-shadow">
               <BarChart3 className="h-4 w-4 text-white" />
             </div>
             <span className="text-lg font-bold text-slate-900 hidden sm:block">Annuaire Stat</span>
           </Link>
           <div className="flex items-center gap-2">
-            <Link to={`/indicateurs?annuaire=${encodeURIComponent(indicateur.annuaire_annee || '')}&thematique=${encodeURIComponent(indicateur.thematique_nom || '')}`} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-[#58061C] hover:bg-[#58061C]/8 transition-all"><ArrowLeft className="h-4 w-4" /> Liste</Link>
+            <Link to={`/indicateurs?annuaire=${encodeURIComponent(indicateur.annuaire_annee || '')}&thematique=${encodeURIComponent(indicateur.thematique_nom || '')}`} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-[#EA580C] hover:bg-[#EA580C]/8 transition-all"><ArrowLeft className="h-4 w-4" /> Liste</Link>
           </div>
         </div>
       </nav>
@@ -215,7 +215,7 @@ export default function IndicateurPublicDetail() {
         <div className="section-container py-8">
           {/* Breadcrumbs */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#58061C]/8 text-[#58061C] border border-[#58061C]/20">{indicateur.code}</span>
+            <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#EA580C]/8 text-[#EA580C] border border-[#EA580C]/20">{indicateur.code}</span>
             {indicateur.annuaire_annee && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <CalendarDays className="h-3 w-3" /> AS {indicateur.annuaire_annee}
@@ -243,10 +243,10 @@ export default function IndicateurPublicDetail() {
         {(indicateur.unite_fr || indicateur.source_fr || indicateur.notes_fr) && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {indicateur.unite_fr && (
-              <div className="bg-white border-2 border-[#58061C]/15 rounded-2xl p-5 hover:shadow-md transition-shadow">
+              <div className="bg-white border-2 border-[#EA580C]/15 rounded-2xl p-5 hover:shadow-md transition-shadow">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-7 h-7 rounded-lg bg-[#58061C]/15 flex items-center justify-center"><BarChart3 className="h-3.5 w-3.5 text-[#58061C]" /></div>
-                  <span className="text-[11px] font-bold text-[#58061C] uppercase tracking-wider">Unité</span>
+                  <div className="w-7 h-7 rounded-lg bg-[#EA580C]/15 flex items-center justify-center"><BarChart3 className="h-3.5 w-3.5 text-[#EA580C]" /></div>
+                  <span className="text-[11px] font-bold text-[#EA580C] uppercase tracking-wider">Unité</span>
                 </div>
                 <p className="text-sm font-medium text-slate-900">{indicateur.unite_fr}</p>
               </div>
@@ -278,11 +278,11 @@ export default function IndicateurPublicDetail() {
 
         {/* Serie navigation */}
         {serie.length > 1 && (
-          <div className={`bg-white border-2 rounded-2xl p-6 ${isViewingYear ? 'border-amber-300 shadow-md shadow-amber-500/10' : fusionData ? 'border-[#58061C]/20 shadow-md shadow-indigo-500/10' : 'border-slate-200'}`}>
+          <div className={`bg-white border-2 rounded-2xl p-6 ${isViewingYear ? 'border-amber-300 shadow-md shadow-amber-500/10' : fusionData ? 'border-[#EA580C]/20 shadow-md shadow-indigo-500/10' : 'border-slate-200'}`}>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isViewingYear ? 'bg-amber-100 border border-amber-200' : 'bg-[#58061C]/15 border border-[#58061C]/20'}`}>
-                  <Layers className={`h-4 w-4 ${isViewingYear ? 'text-amber-600' : 'text-[#58061C]'}`} />
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isViewingYear ? 'bg-amber-100 border border-amber-200' : 'bg-[#EA580C]/15 border border-[#EA580C]/20'}`}>
+                  <Layers className={`h-4 w-4 ${isViewingYear ? 'text-amber-600' : 'text-[#EA580C]'}`} />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Série temporelle</h3>
@@ -290,19 +290,19 @@ export default function IndicateurPublicDetail() {
                 </div>
               </div>
               {isViewingYear && (
-                <button onClick={handleReturnToSerie} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-[#58061C] bg-[#58061C]/8 border border-[#58061C]/20 hover:bg-[#58061C]/15 transition-colors">
+                <button onClick={handleReturnToSerie} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-[#EA580C] bg-[#EA580C]/8 border border-[#EA580C]/20 hover:bg-[#EA580C]/15 transition-colors">
                   <Layers className="h-3.5 w-3.5" /> Voir la série complète
                 </button>
               )}
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={handleReturnToSerie}
-                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${!isViewingYear ? 'bg-gradient-to-r from-[#58061C] to-[#3B0211] text-white shadow-md shadow-[#58061C]/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'}`}>
+                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${!isViewingYear ? 'bg-gradient-to-r from-[#EA580C] to-[#C2410C] text-white shadow-md shadow-[#EA580C]/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'}`}>
                 <Layers className="h-3 w-3" /> {fusionData ? "Série fusionnée" : "Vue série"}
               </button>
               {serie.map(s => (
                 <button key={s.id} onClick={() => handleYearClick(s)}
-                  className={`inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${isViewingYear && viewYearId === s.id ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/25' : 'bg-slate-100 text-slate-600 hover:bg-[#58061C]/8 hover:text-[#58061C] border border-slate-200 hover:border-[#58061C]/20'}`}>
+                  className={`inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${isViewingYear && viewYearId === s.id ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/25' : 'bg-slate-100 text-slate-600 hover:bg-[#EA580C]/8 hover:text-[#EA580C] border border-slate-200 hover:border-[#EA580C]/20'}`}>
                   {s.annee}
                 </button>
               ))}
@@ -315,10 +315,10 @@ export default function IndicateurPublicDetail() {
           <Tabs defaultValue="tableau" className="w-full">
             <div className="border-b border-slate-200 px-6 pt-4">
               <TabsList className="bg-slate-100 rounded-xl p-1 h-auto mb-[-1px]">
-                <TabsTrigger value="tableau" className="rounded-lg px-6 py-2.5 text-sm font-semibold gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#58061C]">
+                <TabsTrigger value="tableau" className="rounded-lg px-6 py-2.5 text-sm font-semibold gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#EA580C]">
                   <TableIcon className="h-4 w-4" /> Tableau
                 </TabsTrigger>
-                <TabsTrigger value="graphique" className="rounded-lg px-6 py-2.5 text-sm font-semibold gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#58061C]">
+                <TabsTrigger value="graphique" className="rounded-lg px-6 py-2.5 text-sm font-semibold gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#EA580C]">
                   <LineChart className="h-4 w-4" /> Graphique
                 </TabsTrigger>
               </TabsList>

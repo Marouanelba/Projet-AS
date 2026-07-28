@@ -80,7 +80,7 @@ export default function TableauThematiqueDetail() {
     setAdjacentWithData(results);
   };
 
-  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#58061C]" /></div>;
+  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#EA580C]" /></div>;
   if (!tableau) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><p className="text-slate-600">Tableau introuvable</p></div>;
 
   return (

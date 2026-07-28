@@ -328,53 +328,80 @@ const IndicateurDetail = () => {
         </div>
 
         {/* Métadonnées */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
+        <Card className="mb-6 border-2 border-slate-200 rounded-2xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                <FileText className="h-4 w-4 text-orange-600" />
+              </div>
               Métadonnées
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="p-6 space-y-5">
             {(indicateur.unite_fr || indicateur.unite_ar) && (
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Unité</h4>
-                <div className="highlight-unit inline-block">
-                  {indicateur.unite_fr}
-                  {indicateur.unite_ar && <span className="ml-2" dir="rtl">({indicateur.unite_ar})</span>}
+              <div className="flex items-start gap-3">
+                <div className="w-1.5 h-full min-h-[24px] rounded-full bg-amber-400 shrink-0 mt-1" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Unité</h4>
+                  <p className="text-sm font-medium text-slate-800">
+                    {indicateur.unite_fr}
+                    {indicateur.unite_ar && <span className="ml-2 text-slate-500" dir="rtl">({indicateur.unite_ar})</span>}
+                  </p>
                 </div>
               </div>
             )}
 
             {(indicateur.source_fr || indicateur.source_ar) && (
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Source</h4>
-                <div className="highlight-source">
-                  {indicateur.source_fr}
-                  {indicateur.source_ar && <div className="mt-1" dir="rtl">{indicateur.source_ar}</div>}
+              <div className="flex items-start gap-3">
+                <div className="w-1.5 h-full min-h-[24px] rounded-full bg-emerald-400 shrink-0 mt-1" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Source</h4>
+                  <p className="text-sm font-medium text-slate-800">
+                    {indicateur.source_fr}
+                    {indicateur.source_ar && <span className="block mt-1 text-slate-500" dir="rtl">{indicateur.source_ar}</span>}
+                  </p>
                 </div>
               </div>
             )}
 
-            {(indicateur.notes_fr || indicateur.notes_ar) && (
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Notes</h4>
-                <div className="highlight-notes">
-                  {highlightIndices(indicateur.notes_fr)}
-                  {indicateur.notes_ar && <div className="mt-1" dir="rtl">{indicateur.notes_ar}</div>}
+            {(indicateur.notes_fr || indicateur.notes_ar) && (() => {
+              const val = (indicateur.notes_fr || '').trim();
+              let noteItems: string[] = [];
+              if (val.startsWith('[') && val.endsWith(']')) {
+                try { const parsed = JSON.parse(val); if (Array.isArray(parsed)) noteItems = parsed.map(String); } catch (e) { noteItems = [val]; }
+              } else {
+                noteItems = [val];
+              }
+              return (
+                <div className="flex items-start gap-3">
+                  <div className="w-1.5 h-full min-h-[24px] rounded-full bg-blue-400 shrink-0 mt-1" />
+                  <div className="flex-1">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Notes</h4>
+                    <div className="bg-amber-50/60 border border-amber-200/60 rounded-xl p-3 space-y-1.5">
+                      {noteItems.map((note, idx) => (
+                        <p key={idx} className="text-sm text-slate-700 leading-relaxed">
+                          {highlightIndices(note)}
+                        </p>
+                      ))}
+                      {indicateur.notes_ar && <p className="text-sm text-slate-500 mt-2" dir="rtl">{indicateur.notes_ar}</p>}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {indicateur.annee_reference && (
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Année de référence</h4>
-                <Badge variant="outline">{indicateur.annee_reference}</Badge>
+              <div className="flex items-start gap-3">
+                <div className="w-1.5 h-full min-h-[24px] rounded-full bg-purple-400 shrink-0 mt-1" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Année de référence</h4>
+                  <Badge variant="outline" className="text-sm">{indicateur.annee_reference}</Badge>
+                </div>
               </div>
             )}
 
             {!indicateur.unite_fr && !indicateur.source_fr && !indicateur.notes_fr && (
-              <p className="text-muted-foreground italic">Aucune métadonnée disponible</p>
+              <p className="text-slate-400 italic text-sm">Aucune métadonnée disponible</p>
             )}
           </CardContent>
         </Card>

@@ -101,7 +101,7 @@ export const ColumnSelectionModal = ({ open, onOpenChange, liaisonId, sourceId, 
         {/* Header */}
         <DialogHeader className="flex-shrink-0 pb-4 border-b border-slate-200">
           <DialogTitle className="flex items-center gap-3 text-xl">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#58061C] to-[#3B0211] flex items-center justify-center shadow-md shadow-[#58061C]/15">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center shadow-md shadow-[#EA580C]/15">
               <Columns className="h-5 w-5 text-white" />
             </div>
             Fusionner les colonnes
@@ -113,17 +113,17 @@ export const ColumnSelectionModal = ({ open, onOpenChange, liaisonId, sourceId, 
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-[#58061C]" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#EA580C]" />
             <p className="text-sm text-slate-600">Chargement des données...</p>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto space-y-6 py-5 min-h-0">
             {/* Info banner */}
-            <div className="flex items-start gap-3 p-4 bg-[#58061C]/8 border border-[#58061C]/20 rounded-xl">
-              <Info className="h-5 w-5 text-[#58061C] mt-0.5 shrink-0" />
-              <div className="text-sm text-[#3B0211]">
+            <div className="flex items-start gap-3 p-4 bg-[#EA580C]/8 border border-[#EA580C]/20 rounded-xl">
+              <Info className="h-5 w-5 text-[#EA580C] mt-0.5 shrink-0" />
+              <div className="text-sm text-[#C2410C]">
                 <p className="font-semibold mb-1">Comment ça marche</p>
-                <p className="text-[#58061C]">Cochez les colonnes que vous souhaitez inclure dans le tableau fusionné. Vous pouvez sélectionner des colonnes des deux tableaux. L'aperçu en bas montre le résultat.</p>
+                <p className="text-[#EA580C]">Cochez les colonnes que vous souhaitez inclure dans le tableau fusionné. Vous pouvez sélectionner des colonnes des deux tableaux. L'aperçu en bas montre le résultat.</p>
               </div>
             </div>
 
@@ -192,7 +192,7 @@ export const ColumnSelectionModal = ({ open, onOpenChange, liaisonId, sourceId, 
             {selectedColumns.length > 0 && (
               <div className="border-2 border-slate-200 rounded-xl p-4 bg-slate-50">
                 <div className="flex items-center gap-2 mb-3">
-                  <ArrowRight className="h-4 w-4 text-[#58061C]" />
+                  <ArrowRight className="h-4 w-4 text-[#EA580C]" />
                   <span className="text-sm font-bold text-slate-900">Colonnes sélectionnées ({selectedColumns.length})</span>
                   <span className="text-xs text-slate-500">— Ordre d'affichage dans le tableau final</span>
                 </div>
@@ -259,7 +259,7 @@ export const ColumnSelectionModal = ({ open, onOpenChange, liaisonId, sourceId, 
             Annuler
           </Button>
           <Button onClick={handleSave} disabled={saving || loading || selectedColumns.length === 0}
-            className="rounded-xl bg-gradient-to-r from-[#58061C] to-[#3B0211] hover:from-[#6b0a24] hover:to-[#58061C]digo-500 hover:to-[#58061C] text-white shadow-sm shadow-[#58061C]/15 px-6">
+            className="rounded-xl bg-gradient-to-r from-[#EA580C] to-[#C2410C] hover:from-[#C2410C] hover:to-[#EA580C] text-white shadow-sm shadow-[#EA580C]/15 px-6">
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Créer le tableau fusionné
           </Button>
