@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { annuaires, thematiques, tableaux, corrections } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,10 @@ import {
   Link2,
   Calendar,
   Layers,
-  Table as TableIcon
+  Table as TableIcon,
+  Pencil,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -143,6 +146,41 @@ export default function CorrecteurWorkspace() {
   const [pdfUrlModal, setPdfUrlModal] = useState<{ open: boolean; url: string }>({ open: false, url: '' });
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Notes editing state
+  const [editNotesModal, setEditNotesModal] = useState<{
+    open: boolean;
+    notes: string[];
+    originalNotes: string[];
+  }>({
+    open: false,
+    notes: [],
+    originalNotes: []
+  });
+
+  // Parse notes_fr (JSON array or plain string) into structured list
+  const notesList = useMemo(() => {
+    if (!currentTableau?.notes_fr) return [];
+    const val = currentTableau.notes_fr.trim();
+    if (val.startsWith("[") && val.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) return parsed.map((n: any) => String(n));
+      } catch (e) {}
+    }
+    return [currentTableau.notes_fr];
+  }, [currentTableau?.notes_fr]);
+
+  // Highlight notation markers like (1), (2), etc.
+  const highlightIndices = (text: string | null) => {
+    if (!text) return null;
+    const parts = text.split(/(\(\d+\))/g);
+    return parts.map((part, i) =>
+      /\(\d+\)/.test(part)
+        ? <span key={i} className="inline-flex items-center justify-center min-w-[1.5rem] px-1 py-0.5 rounded-md bg-purple-100 text-purple-700 font-bold text-[10px]">{part}</span>
+        : part
+    );
+  };
 
   // 1. Charger la liste des annuaires au montage
   useEffect(() => {
@@ -333,6 +371,41 @@ export default function CorrecteurWorkspace() {
       toast.success("Correction métadonnée enregistrée !");
     } catch (err: any) {
       toast.error("Erreur lors de la sauvegarde", { description: err.message });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Submit Notes Correction
+  const handleSaveNotesCorrection = async () => {
+    if (!currentTableau) return;
+    try {
+      setSubmitting(true);
+      // For each note: if modified keep new value, if empty keep original
+      const finalNotes = editNotesModal.notes.map((note, idx) => {
+        if (note.trim() === '' && editNotesModal.originalNotes[idx]) {
+          return editNotesModal.originalNotes[idx];
+        }
+        return note;
+      }).filter(n => n.trim() !== '');
+
+      const valeur_corrigee = finalNotes.length === 1
+        ? finalNotes[0]
+        : JSON.stringify(finalNotes);
+
+      const res = await corrections.saveCorrection(currentTableau.id, {
+        type_element: 'notes_fr',
+        valeur_corrigee,
+        commentaire: 'Modification des notes',
+        user_display_name: 'Correcteur'
+      });
+
+      setCurrentTableau(res.tableau);
+      setCorrectionHistory(prev => [res.correction, ...prev]);
+      setEditNotesModal({ open: false, notes: [], originalNotes: [] });
+      toast.success("Notes mises à jour !");
+    } catch (err: any) {
+      toast.error("Erreur lors de la sauvegarde des notes", { description: err.message });
     } finally {
       setSubmitting(false);
     }
@@ -601,7 +674,7 @@ export default function CorrecteurWorkspace() {
                               type_element: 'titre_fr',
                               label: 'Titre (Français)',
                               valeur_originale: currentTableau.titre_fr,
-                              valeur_corrigee: currentTableau.titre_fr,
+                              valeur_corrigee: '',
                               commentaire: ''
                             })}
                           >
@@ -638,8 +711,35 @@ export default function CorrecteurWorkspace() {
                       </div>
 
                       {currentTableau.notes_fr && (
-                        <div className="p-2 bg-amber-50/60 border border-amber-200/60 rounded-xl text-amber-900 text-[11px] whitespace-pre-line">
-                          <strong>Notes:</strong> {currentTableau.notes_fr}
+                        <div className="p-3 bg-amber-50/60 border border-amber-200/60 rounded-xl">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div className="w-5 h-5 rounded-md bg-amber-100 flex items-center justify-center">
+                                <FileText className="h-3 w-3 text-amber-600" />
+                              </div>
+                              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Notes</span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-[10px] text-[#58061C] gap-1"
+                              onClick={() => setEditNotesModal({
+                                open: true,
+                                notes: notesList.length > 0 ? [...notesList] : [''],
+                                originalNotes: notesList.length > 0 ? [...notesList] : []
+                              })}
+                            >
+                              <Pencil className="h-3 w-3" />
+                              Éditer notes
+                            </Button>
+                          </div>
+                          <div className="space-y-1.5">
+                            {notesList.map((note, idx) => (
+                              <p key={idx} className="text-[11px] text-amber-900 leading-relaxed">
+                                {highlightIndices(note)}
+                              </p>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </CardContent>
@@ -958,6 +1058,14 @@ export default function CorrecteurWorkspace() {
             </DialogHeader>
 
             <div className="space-y-4 py-2">
+              {editMetaModal.valeur_originale && (
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-semibold text-slate-500">Valeur actuelle</Label>
+                  <p className="text-sm text-slate-500 line-through decoration-red-400 decoration-2 bg-red-50/60 border border-red-100 rounded-xl px-3 py-2">
+                    {editMetaModal.valeur_originale}
+                  </p>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-700">Nouvelle valeur *</Label>
                 <Input
@@ -985,6 +1093,77 @@ export default function CorrecteurWorkspace() {
               <Button size="sm" onClick={handleSaveMetaCorrection} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#58061C] hover:bg-[#420415] text-white">
                 {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 Sauvegarder
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal: Custom PDF URL */}
+        <Dialog open={editNotesModal.open} onOpenChange={(open) => setEditNotesModal(prev => ({ ...prev, open }))}>
+          <DialogContent className="max-w-lg rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <FileText className="h-4 w-4 text-amber-600" />
+                Éditer les notes
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-3 py-2 max-h-[400px] overflow-y-auto">
+              {editNotesModal.notes.map((note, idx) => (
+                <div key={idx} className="flex items-start gap-2">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-[10px] font-semibold text-slate-500">Note {idx + 1}</Label>
+                    {editNotesModal.originalNotes[idx] && (
+                      <p className="text-xs text-slate-500 line-through decoration-red-400 decoration-2 bg-red-50/60 border border-red-100 rounded-xl px-3 py-1.5">
+                        {editNotesModal.originalNotes[idx]}
+                      </p>
+                    )}
+                    <Input
+                      value={note}
+                      onChange={(e) => {
+                        const updated = [...editNotesModal.notes];
+                        updated[idx] = e.target.value;
+                        setEditNotesModal(prev => ({ ...prev, notes: updated }));
+                      }}
+                      className="rounded-xl text-xs"
+                      placeholder="Nouvelle valeur de la note..."
+                    />
+                  </div>
+                  {editNotesModal.notes.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 mt-5 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => {
+                        const updated = editNotesModal.notes.filter((_, i) => i !== idx);
+                        const updatedOriginals = editNotesModal.originalNotes.filter((_, i) => i !== idx);
+                        setEditNotesModal(prev => ({ ...prev, notes: updated, originalNotes: updatedOriginals }));
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full rounded-xl text-xs gap-1.5 border-dashed"
+                onClick={() => setEditNotesModal(prev => ({ ...prev, notes: [...prev.notes, ''], originalNotes: [...prev.originalNotes, ''] }))}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Ajouter une note
+              </Button>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditNotesModal({ open: false, notes: [], originalNotes: [] })} className="rounded-xl text-xs">
+                Annuler
+              </Button>
+              <Button size="sm" onClick={handleSaveNotesCorrection} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#58061C] hover:bg-[#420415] text-white">
+                {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Sauvegarder les notes
               </Button>
             </DialogFooter>
           </DialogContent>
