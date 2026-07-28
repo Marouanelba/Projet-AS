@@ -5,6 +5,30 @@ import { AuthRequest, requireAuth } from '../middleware/auth.js';
 const router = Router();
 
 /**
+ * POST /api/admin/fix-correction-names
+ * Met à jour user_display_name dans tableaux_corrections pour les entrées
+ * qui ont encore l'ancienne valeur par défaut 'Correcteur', en utilisant
+ * le vrai nom (display_name) ou l'email depuis la table users.
+ */
+router.post('/fix-correction-names', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await pool.query(`
+      UPDATE tableaux_corrections tc
+      SET user_display_name = COALESCE(NULLIF(u.display_name, ''), u.email)
+      FROM users u
+      WHERE tc.user_id = u.id
+        AND (tc.user_display_name = 'Correcteur' OR tc.user_display_name IS NULL)
+        AND (u.display_name IS NOT NULL OR u.email IS NOT NULL)
+      RETURNING tc.id
+    `);
+    res.json({ success: true, updated: result.rowCount, message: `${result.rowCount} correction(s) mises à jour.` });
+  } catch (error) {
+    console.error('[ADMIN] Erreur fix-correction-names:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour des noms' });
+  }
+});
+
+/**
  * POST /api/admin/clear-tables
  * Vide toutes les tables dans l'ordre correct (respect des FK)
  */

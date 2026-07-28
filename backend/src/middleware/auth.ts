@@ -5,6 +5,8 @@ export interface AuthUser {
   id: number;
   email: string;
   display_name?: string;
+  role?: 'admin' | 'correcteur';
+  points?: number;
 }
 
 export interface AuthRequest extends Request {
@@ -15,7 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
 export function generateToken(user: AuthUser): string {
   return jwt.sign(
-    { id: user.id, email: user.email, display_name: user.display_name },
+    { id: user.id, email: user.email, display_name: user.display_name, role: user.role, points: user.points },
     JWT_SECRET,
     { expiresIn: '7d' }
   );

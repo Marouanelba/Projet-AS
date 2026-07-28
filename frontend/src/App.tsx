@@ -18,6 +18,7 @@ import Liaisons from "./pages/admin/Liaisons";
 import ImportData from "./pages/admin/ImportData";
 import Parametres from "./pages/admin/Parametres";
 import CorrecteurWorkspace from "./pages/admin/CorrecteurWorkspace";
+import Validation from "./pages/admin/Validation";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -53,6 +54,7 @@ const App = () => {
               <Route path="/admin/liaisons" element={<Liaisons />} />
               <Route path="/admin/import" element={<ImportData />} />
               <Route path="/admin/correcteur" element={<CorrecteurWorkspace />} />
+              <Route path="/admin/validation" element={<Validation />} />
               <Route path="/admin/parametres" element={<Parametres />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

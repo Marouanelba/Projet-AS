@@ -13,6 +13,22 @@ export function getToken(): string | null {
   return localStorage.getItem('auth_token');
 }
 
+/**
+ * Decode the JWT payload (no signature verification — client-side only).
+ * Returns the user fields embedded in the token, or null if absent/invalid.
+ */
+export function getCurrentUser(): { id: number; email: string; display_name?: string; role?: string; points?: number } | null {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const payload = token.split('.')[1];
+    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    return decoded as { id: number; email: string; display_name?: string; role?: string; points?: number };
+  } catch {
+    return null;
+  }
+}
+
 export function setToken(token: string): void {
   localStorage.setItem('auth_token', token);
 }
@@ -367,6 +383,12 @@ export const admin = {
       body: JSON.stringify({ type, data }),
     });
   },
+
+  async fixCorrectionNames() {
+    return request<{ success: boolean; updated: number; message: string }>('/admin/fix-correction-names', {
+      method: 'POST',
+    });
+  },
 };
 
 export const corrections = {
@@ -392,6 +414,26 @@ export const corrections = {
     return request<any>(`/corrections/annuaires/${annee}/pdf-url`, {
       method: 'POST',
       body: JSON.stringify({ pdf_url, pdf_path }),
+    });
+  },
+
+  async getPendingCorrections() {
+    return request<any[]>('/corrections/pending');
+  },
+
+  async getHistoryCorrections() {
+    return request<any[]>('/corrections/history');
+  },
+
+  async approveCorrection(id: number | string) {
+    return request<{ success: boolean; message: string }>(`/corrections/${id}/approve`, {
+      method: 'POST',
+    });
+  },
+
+  async rejectCorrection(id: number | string) {
+    return request<{ success: boolean; message: string }>(`/corrections/${id}/reject`, {
+      method: 'POST',
     });
   },
 };

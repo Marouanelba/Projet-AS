@@ -35,15 +35,15 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
 
     // Insérer l'utilisateur
     const result = await pool.query(
-      'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email, display_name, created_at',
+      'INSERT INTO users (email, password_hash, role) VALUES ($1, $2, \'correcteur\') RETURNING id, email, display_name, role, points, created_at',
       [email, password_hash]
     );
 
     const user = result.rows[0];
-    const token = generateToken({ id: user.id, email: user.email, display_name: user.display_name });
+    const token = generateToken({ id: user.id, email: user.email, display_name: user.display_name, role: user.role, points: user.points });
 
     res.status(201).json({
-      user: { id: user.id, email: user.email, display_name: user.display_name },
+      user: { id: user.id, email: user.email, display_name: user.display_name, role: user.role, points: user.points },
       token,
     });
   } catch (error) {
@@ -67,7 +67,7 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
 
     // Trouver l'utilisateur
     const result = await pool.query(
-      'SELECT id, email, password_hash, display_name FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, display_name, role, points FROM users WHERE email = $1',
       [email]
     );
 
@@ -85,10 +85,10 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const token = generateToken({ id: user.id, email: user.email, display_name: user.display_name });
+    const token = generateToken({ id: user.id, email: user.email, display_name: user.display_name, role: user.role, points: user.points });
 
     res.json({
-      user: { id: user.id, email: user.email, display_name: user.display_name },
+      user: { id: user.id, email: user.email, display_name: user.display_name, role: user.role, points: user.points },
       token,
     });
   } catch (error) {
@@ -104,7 +104,7 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
 router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const result = await pool.query(
-      'SELECT id, email, display_name, created_at FROM users WHERE id = $1',
+      'SELECT id, email, display_name, role, points, created_at FROM users WHERE id = $1',
       [req.user!.id]
     );
 
@@ -134,13 +134,13 @@ router.put('/profile', requireAuth, async (req: AuthRequest, res: Response) => {
     }
 
     const result = await pool.query(
-      'UPDATE users SET display_name = $1, updated_at = NOW() WHERE id = $2 RETURNING id, email, display_name',
+      'UPDATE users SET display_name = $1, updated_at = NOW() WHERE id = $2 RETURNING id, email, display_name, role, points',
       [display_name.trim(), req.user!.id]
     );
 
     const user = result.rows[0];
     // Générer un nouveau token avec le display_name mis à jour
-    const token = generateToken({ id: user.id, email: user.email, display_name: user.display_name });
+    const token = generateToken({ id: user.id, email: user.email, display_name: user.display_name, role: user.role, points: user.points });
 
     res.json({ user, token });
   } catch (error) {

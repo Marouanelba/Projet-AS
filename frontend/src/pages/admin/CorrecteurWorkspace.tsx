@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import AdminLayout from '@/components/AdminLayout';
-import { annuaires, thematiques, tableaux, corrections } from '@/lib/api';
+import { annuaires, thematiques, tableaux, corrections, getCurrentUser } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -75,6 +75,9 @@ interface CorrectionLog {
 }
 
 export default function CorrecteurWorkspace() {
+  // Current user display name (read from JWT token)
+  const currentUserDisplayName = getCurrentUser()?.display_name || getCurrentUser()?.email || 'Correcteur';
+
   const [listAnnuaires, setListAnnuaires] = useState<Annuaire[]>([]);
   const [listThematiques, setListThematiques] = useState<Thematique[]>([]);
   const [listTableaux, setListTableaux] = useState<Tableau[]>([]);
@@ -314,7 +317,7 @@ export default function CorrecteurWorkspace() {
         col_index: editCellModal.col_index,
         valeur_corrigee: editCellModal.valeur_corrigee,
         commentaire: editCellModal.commentaire,
-        user_display_name: 'Correcteur'
+        user_display_name: currentUserDisplayName
       });
 
       setCurrentTableau(res.tableau);
@@ -339,7 +342,7 @@ export default function CorrecteurWorkspace() {
         col_index: editHeaderModal.col_index,
         valeur_corrigee: editHeaderModal.valeur_corrigee,
         commentaire: editHeaderModal.commentaire,
-        user_display_name: 'Correcteur'
+        user_display_name: currentUserDisplayName
       });
 
       setCurrentTableau(res.tableau);
@@ -362,7 +365,7 @@ export default function CorrecteurWorkspace() {
         type_element: editMetaModal.type_element,
         valeur_corrigee: editMetaModal.valeur_corrigee,
         commentaire: editMetaModal.commentaire,
-        user_display_name: 'Correcteur'
+        user_display_name: currentUserDisplayName
       });
 
       setCurrentTableau(res.tableau);
@@ -397,7 +400,7 @@ export default function CorrecteurWorkspace() {
         type_element: 'notes_fr',
         valeur_corrigee,
         commentaire: 'Modification des notes',
-        user_display_name: 'Correcteur'
+        user_display_name: currentUserDisplayName
       });
 
       setCurrentTableau(res.tableau);
@@ -622,21 +625,21 @@ export default function CorrecteurWorkspace() {
         </div>
 
         {/* Split Screen Layout */}
-        {loadingDetails ? (
-          <div className="flex flex-col items-center justify-center p-20 bg-white border border-slate-200 rounded-2xl space-y-3">
-            <Loader2 className="h-8 w-8 animate-spin text-[#EA580C]" />
-            <p className="text-sm font-medium text-slate-600">Chargement des données du tableau et de son PDF...</p>
-          </div>
-        ) : !currentTableau ? (
-          <div className="p-12 text-center bg-white border border-slate-200 rounded-2xl">
-            <AlertCircle className="h-10 w-10 text-amber-500 mx-auto mb-3" />
-            <p className="text-sm font-medium text-slate-700">Veuillez sélectionner un annuaire, une thématique et un tableau dans la barre de filtre ci-dessus.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            
-            {/* Left Pane: Interactive Table & Metadata (6 Columns) */}
-            <div className="lg:col-span-6 space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* Left Pane: Interactive Table & Metadata (6 Columns) */}
+          <div className="lg:col-span-6 space-y-4">
+            {loadingDetails ? (
+              <div className="flex flex-col items-center justify-center p-20 bg-white border border-slate-200 rounded-2xl space-y-3 min-h-[400px]">
+                <Loader2 className="h-8 w-8 animate-spin text-[#EA580C]" />
+                <p className="text-sm font-medium text-slate-600">Chargement des données du tableau...</p>
+              </div>
+            ) : !currentTableau ? (
+              <div className="p-12 text-center bg-white border border-slate-200 rounded-2xl min-h-[300px] flex flex-col justify-center items-center">
+                <AlertCircle className="h-10 w-10 text-amber-500 mx-auto mb-3" />
+                <p className="text-sm font-medium text-slate-700">Veuillez sélectionner une thématique et un tableau dans la barre de filtre ci-dessus.</p>
+              </div>
+            ) : (
               
               <Tabs defaultValue="donnees" className="w-full">
                 <div className="flex items-center justify-between bg-white p-3 border border-slate-200 rounded-2xl mb-4">
@@ -890,7 +893,8 @@ export default function CorrecteurWorkspace() {
                   </Card>
                 </TabsContent>
               </Tabs>
-            </div>
+            )}
+          </div>
 
             {/* Right Pane: PDF Viewer (6 Columns) */}
             <div className="lg:col-span-6 sticky top-6 space-y-3">
@@ -941,7 +945,6 @@ export default function CorrecteurWorkspace() {
             </div>
 
           </div>
-        )}
 
         {/* Modal: Edit Cell & Save Correction with Traceability */}
         <Dialog open={editCellModal.open} onOpenChange={(open) => setEditCellModal(prev => ({ ...prev, open }))}>

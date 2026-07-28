@@ -18,7 +18,11 @@ const Auth = () => {
   // Redirect if already logged in - must be in useEffect
   useEffect(() => {
     if (user) {
-      navigate('/admin/indicateurs');
+      if (user.role === 'correcteur') {
+        navigate('/admin/correcteur');
+      } else {
+        navigate('/admin/indicateurs');
+      }
     }
   }, [user, navigate]);
 
@@ -37,7 +41,7 @@ const Auth = () => {
       toast.error('Erreur de connexion', { description: error.message });
     } else {
       toast.success('Connexion réussie');
-      navigate('/admin/indicateurs');
+      // Redirection is handled automatically by the useEffect above
     }
   };
 
