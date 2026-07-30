@@ -392,8 +392,11 @@ export const admin = {
 };
 
 export const corrections = {
-  async getTableauDetails(id: number | string) {
-    return request<{ tableau: any; history: any[] }>(`/corrections/tableaux/${id}`);
+  async getTableauDetails(id: number | string, correctionId?: number | string) {
+    const url = correctionId
+      ? `/corrections/tableaux/${id}?correctionId=${correctionId}`
+      : `/corrections/tableaux/${id}`;
+    return request<{ tableau: any; history: any[] }>(url);
   },
 
   async saveCorrection(id: number | string, data: {
@@ -405,6 +408,37 @@ export const corrections = {
     user_display_name?: string;
   }) {
     return request<{ tableau: any; correction: any }>(`/corrections/tableaux/${id}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async saveStructuralCorrection(id: number | string, data: {
+    type_operation:
+      | 'entete_merge_cells'
+      | 'entete_unmerge_cells'
+      | 'entete_move_row'
+      | 'entete_move_col'
+      | 'entete_insert_row'
+      | 'entete_delete_row'
+      | 'entete_insert_col'
+      | 'entete_delete_col'
+      | 'donnees_insert_row'
+      | 'donnees_delete_row';
+    commentaire?: string;
+    user_display_name?: string;
+    // merge / unmerge cells
+    start_row?: number;
+    start_col?: number;
+    end_row?: number;
+    end_col?: number;
+    // row operations
+    row_index?: number;
+    direction?: 'up' | 'down' | 'left' | 'right';
+    // column operations
+    col_index?: number;
+  }) {
+    return request<{ tableau: any; correction: any }>(`/corrections/tableaux/${id}/structure`, {
       method: 'POST',
       body: JSON.stringify(data),
     });

@@ -36,6 +36,8 @@ interface PendingCorrection {
   valeur_corrigee: string;
   commentaire?: string;
   created_at: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  snapshot_before?: any;
   tableau_code: string;
   tableau_titre: string;
   pdf_url?: string;
@@ -54,11 +56,13 @@ export default function Validation() {
     open: boolean;
     correction: PendingCorrection | null;
     tableau: any | null;
+    tableau_original: any | null;
     loading: boolean;
   }>({
     open: false,
     correction: null,
     tableau: null,
+    tableau_original: null,
     loading: false
   });
 
@@ -131,14 +135,16 @@ export default function Validation() {
       open: true,
       correction: item,
       tableau: null,
+      tableau_original: null,
       loading: true
     });
 
     try {
-      const res = await corrections.getTableauDetails(item.id_tableau);
+      const res = await corrections.getTableauDetails(item.id_tableau, item.id);
       setVerifyModal(prev => ({
         ...prev,
         tableau: res.tableau,
+        tableau_original: (res as any).tableau_original ?? null,
         loading: false
       }));
     } catch (err: any) {
@@ -166,6 +172,157 @@ export default function Validation() {
   const isHeaderCorrection = verifyModal.correction?.type_element === 'entete';
   const rawPdfUrl = verifyModal.correction?.pdf_url;
   const pdfProxyUrl = rawPdfUrl ? `http://localhost:3001/api/corrections/pdf-proxy?url=${encodeURIComponent(rawPdfUrl)}` : null;
+
+  // Which tableau to render in the modal:
+  // if tableau_original exists → show original state (before correction) with the cell highlighted
+  // otherwise fall back to tableau (already has the correction applied, highlight still works)
+  const displayTableau = verifyModal.tableau_original ?? verifyModal.tableau;
+
+  // Date formatter
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
+
+  const formatElapsedTime = (iso: string) => {
+    const diffMs = Math.max(0, Date.now() - new Date(iso).getTime());
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 1) return "A l'instant";
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} h ${minutes % 60} min`;
+    const days = Math.floor(hours / 24);
+    return `${days} j ${hours % 24} h`;
+  };
+
+  const formatStatusBadge = (status?: PendingCorrection['status']) => {
+    if (status === 'approved') {
+      return <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-none font-bold">Approuve</Badge>;
+    }
+    if (status === 'rejected') {
+      return <Badge variant="secondary" className="bg-rose-100 text-rose-800 hover:bg-rose-100 border-none font-bold">Rejete</Badge>;
+    }
+    return <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-none font-bold">En attente</Badge>;
+  };
+
+  // Merged cells helpers for the verification modal
+  const colLetterToIdx = (colStr: string): number => {
+    let idx = 0;
+    const str = colStr.toUpperCase();
+    for (let i = 0; i < str.length; i++) {
+      idx = idx * 26 + (str.charCodeAt(i) - 65 + 1);
+    }
+    return idx - 1;
+  };
+
+  const parseMergedCells = (mergedCells: any) => {
+    if (!mergedCells) return [];
+    const list = typeof mergedCells === 'string' ? JSON.parse(mergedCells) : mergedCells;
+    if (!Array.isArray(list)) return [];
+    const rules: Array<{ startRow: number; endRow: number; startCol: number; endCol: number; rowspan: number; colspan: number; value?: string }> = [];
+    for (const item of list) {
+      if (!item) continue;
+      const rangeStr = item.range || (typeof item === 'string' ? item : '');
+      if (!rangeStr) continue;
+      const match = rangeStr.match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/i);
+      if (!match) continue;
+      const startCol = colLetterToIdx(match[1]);
+      const startRow = parseInt(match[2], 10) - 1;
+      const endCol = colLetterToIdx(match[3] || match[1]);
+      const endRow = parseInt(match[4] || match[2], 10) - 1;
+      rules.push({ startRow, endRow, startCol, endCol, rowspan: endRow - startRow + 1, colspan: endCol - startCol + 1, value: item.value });
+    }
+    return rules;
+  };
+
+  const modalMergedRules = parseMergedCells(displayTableau?.merged_cells);
+
+  const getModalMergeInfo = (rIdx: number, cIdx: number) => {
+    const rule = modalMergedRules.find(
+      m => rIdx >= m.startRow && rIdx <= m.endRow && cIdx >= m.startCol && cIdx <= m.endCol
+    );
+    if (!rule) return { isTopLeft: true, isMerged: false, rowspan: 1, colspan: 1, value: undefined };
+    return {
+      isTopLeft: rIdx === rule.startRow && cIdx === rule.startCol,
+      isMerged: true,
+      rowspan: rule.rowspan,
+      colspan: rule.colspan,
+      value: rule.value
+    };
+  };
+
+  const parseRangeFromDescription = (value?: string) => {
+    const match = String(value || '').match(/([A-Z]+)(\d+):([A-Z]+)(\d+)/i);
+    if (!match) return null;
+    const startCol = colLetterToIdx(match[1]);
+    const startRow = Number(match[2]) - 1;
+    const endCol = colLetterToIdx(match[3]);
+    const endRow = Number(match[4]) - 1;
+    return {
+      startRow: Math.min(startRow, endRow),
+      endRow: Math.max(startRow, endRow),
+      startCol: Math.min(startCol, endCol),
+      endCol: Math.max(startCol, endCol)
+    };
+  };
+
+  const isStructuralHeaderCorrection = (type?: string) => !!type?.startsWith('entete_');
+  const structuralRange = parseRangeFromDescription(verifyModal.correction?.valeur_corrigee);
+
+  const isHeaderStructurallyTouched = (rIdx: number, cIdx: number) => {
+    const correction = verifyModal.correction;
+    if (!correction || !isStructuralHeaderCorrection(correction.type_element)) return false;
+
+    if (structuralRange) {
+      return rIdx >= structuralRange.startRow && rIdx <= structuralRange.endRow
+        && cIdx >= structuralRange.startCol && cIdx <= structuralRange.endCol;
+    }
+
+    if (correction.type_element.includes('_row') && correction.row_index !== null && correction.row_index !== undefined) {
+      return Number(correction.row_index) === rIdx;
+    }
+
+    if (correction.type_element.includes('_col') && correction.col_index !== null && correction.col_index !== undefined) {
+      return Number(correction.col_index) === cIdx;
+    }
+
+    return false;
+  };
+
+  const isDataStructurallyTouched = (rIdx: number, cIdx: number) => {
+    const correction = verifyModal.correction;
+    if (!correction) return false;
+
+    if (
+      (correction.type_element === 'donnees_insert_row' || correction.type_element === 'donnees_delete_row')
+      && correction.row_index !== null
+      && correction.row_index !== undefined
+    ) {
+      return Number(correction.row_index) === rIdx;
+    }
+
+    if (
+      ['entete_move_col', 'entete_insert_col', 'entete_delete_col'].includes(correction.type_element)
+      && correction.col_index !== null
+      && correction.col_index !== undefined
+    ) {
+      return Number(correction.col_index) === cIdx;
+    }
+
+    return false;
+  };
+
+  const getDataStructuralLabel = () => {
+    switch (verifyModal.correction?.type_element) {
+      case 'donnees_insert_row': return 'Ligne de donnees inseree';
+      case 'donnees_delete_row': return 'Ligne de donnees supprimee';
+      case 'entete_move_col': return 'Colonne de donnees deplacee';
+      case 'entete_insert_col': return 'Colonne de donnees inseree';
+      case 'entete_delete_col': return 'Colonne de donnees supprimee';
+      default: return 'Donnee modifiee';
+    }
+  };
 
   return (
     <AdminLayout>
@@ -231,11 +388,14 @@ export default function Validation() {
                           <th className="px-6 py-4">Valeur Originale</th>
                           <th className="px-6 py-4">Valeur Proposée</th>
                           <th className="px-6 py-4">Commentaire</th>
+                          <th className="px-6 py-4">Etat</th>
+                          <th className="px-6 py-4">Date de modification</th>
+                          <th className="px-6 py-4">Temps</th>
                           <th className="px-6 py-4 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-                        {pendingList.map((item) => {
+                        {[...pendingList].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((item) => {
                           const isProcessing = processingId === item.id;
                           return (
                             <tr key={item.id} className="hover:bg-slate-50/20 transition-colors">
@@ -290,6 +450,24 @@ export default function Validation() {
                                 ) : (
                                   <span className="text-xs text-slate-400 italic">Aucun commentaire</span>
                                 )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {formatStatusBadge(item.status)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-xs font-medium text-slate-700">
+                                    {formatDate(item.created_at).split(' ')[0]}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">
+                                    {formatDate(item.created_at).split(' ')[1]}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded">
+                                  {formatElapsedTime(item.created_at)}
+                                </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-right">
                                 <div className="flex items-center justify-end gap-2">
@@ -380,12 +558,14 @@ export default function Validation() {
                           <th className="px-6 py-4">Valeur Originale</th>
                           <th className="px-6 py-4">Valeur Appliquée</th>
                           <th className="px-6 py-4">Commentaire</th>
-                          <th className="px-6 py-4">Décision</th>
+                          <th className="px-6 py-4">Date de modification</th>
+                          <th className="px-6 py-4">Temps</th>
+                          <th className="px-6 py-4">Decision</th>
                           <th className="px-6 py-4 text-right">Détails</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-                        {historyList.map((item) => {
+                        {[...historyList].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((item) => {
                           return (
                             <tr key={item.id} className="hover:bg-slate-50/20 transition-colors">
                               <td className="px-6 py-4 whitespace-nowrap">
@@ -439,6 +619,21 @@ export default function Validation() {
                                 ) : (
                                   <span className="text-xs text-slate-400 italic">Aucun commentaire</span>
                                 )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-xs font-medium text-slate-700">
+                                    {formatDate(item.created_at).split(' ')[0]}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">
+                                    {formatDate(item.created_at).split(' ')[1]}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded">
+                                  {formatElapsedTime(item.created_at)}
+                                </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 {item.status === 'approved' ? (
@@ -538,27 +733,63 @@ export default function Validation() {
                 <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <TableIcon className="h-3.5 w-3.5 text-indigo-500" />
-                    Grille de données
+                    État du tableau au moment de la modification
                   </span>
+                  {/* Legend */}
+                  <div className="flex items-center gap-3 text-[10px] font-medium">
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 rounded bg-rose-200 border border-rose-400" />
+                      <span className="text-rose-700">Valeur originale</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 rounded bg-amber-200 border border-amber-400" />
+                      <span className="text-amber-700">Valeur proposée</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 rounded bg-sky-200 border border-sky-400" />
+                      <span className="text-sky-700">Données touchées</span>
+                    </span>
+                  </div>
                 </div>
                 <div className="flex-1 overflow-auto">
-                  {verifyModal.tableau ? (
+                  {displayTableau ? (
                     <>
                       <table className="w-full text-left border-collapse bg-white">
                         <thead>
-                          {Array.isArray(verifyModal.tableau.entetes) && verifyModal.tableau.entetes.map((row: any, rIdx: number) => (
+                          {Array.isArray(displayTableau.entetes) && displayTableau.entetes.map((row: any, rIdx: number) => (
                             <tr key={rIdx} className="bg-slate-50 border-b border-slate-200">
                               {Array.isArray(row) && row.map((cell: any, cIdx: number) => {
-                                const isCorrected = isHeaderCorrection && verifyModal.correction?.row_index === rIdx && verifyModal.correction?.col_index === cIdx;
+                                const mergeInfo = getModalMergeInfo(rIdx, cIdx);
+                                if (mergeInfo.isMerged && !mergeInfo.isTopLeft) return null;
+                                const isModified = isHeaderCorrection
+                                  && Number(verifyModal.correction?.row_index) === rIdx
+                                  && Number(verifyModal.correction?.col_index) === cIdx;
+                                const isStructuralTouched = isHeaderStructurallyTouched(rIdx, cIdx);
+                                const rawValue = String(cell ?? mergeInfo.value ?? '');
                                 return (
                                   <th
                                     key={cIdx}
+                                    rowSpan={mergeInfo.rowspan}
+                                    colSpan={mergeInfo.colspan}
                                     className={cn(
-                                      "px-3 py-2 text-xs font-bold text-slate-800 border-r border-slate-200 text-center whitespace-nowrap min-w-[100px]",
-                                      isCorrected ? "bg-amber-100 text-amber-950 font-bold border-amber-300 relative outline outline-2 outline-amber-400" : ""
+                                      "px-3 py-2 text-xs font-bold text-slate-800 border-r border-slate-200 text-center whitespace-pre-line align-middle min-w-[100px]",
+                                      isModified ? "bg-rose-50 text-rose-800 border-rose-300 outline outline-2 outline-rose-400" : "",
+                                      isStructuralTouched ? "bg-amber-50 text-amber-900 border-amber-300 outline outline-2 outline-amber-400" : ""
                                     )}
                                   >
-                                    {cell}
+                                    {isModified ? (
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <span className="line-through text-rose-500 text-[10px]">{rawValue || "(Vide)"}</span>
+                                        <span className="text-amber-700 font-bold bg-amber-100 px-1.5 py-0.5 rounded text-[10px]">
+                                          ➔ {verifyModal.correction?.valeur_corrigee}
+                                        </span>
+                                      </div>
+                                    ) : isStructuralTouched ? (
+                                      <div className="flex flex-col items-center gap-1">
+                                        <span>{rawValue || "(Vide)"}</span>
+                                        <span className="text-amber-800 font-bold bg-amber-100 px-1.5 py-0.5 rounded text-[10px]">Modification en-tete</span>
+                                      </div>
+                                    ) : rawValue}
                                   </th>
                                 );
                               })}
@@ -566,19 +797,37 @@ export default function Validation() {
                           ))}
                         </thead>
                         <tbody>
-                          {Array.isArray(verifyModal.tableau.donnees) && verifyModal.tableau.donnees.map((row: any, rIdx: number) => (
-                            <tr key={rIdx} className="border-b border-slate-150 hover:bg-slate-50/20">
+                          {Array.isArray(displayTableau.donnees) && displayTableau.donnees.map((row: any, rIdx: number) => (
+                            <tr key={rIdx} className="border-b border-slate-100 hover:bg-slate-50/20">
                               {Array.isArray(row) && row.map((cell: any, cIdx: number) => {
-                                const isCorrected = isCellCorrection && verifyModal.correction?.row_index === rIdx && verifyModal.correction?.col_index === cIdx;
+                                const isModified = isCellCorrection
+                                  && Number(verifyModal.correction?.row_index) === rIdx
+                                  && Number(verifyModal.correction?.col_index) === cIdx;
+                                const isDataTouched = isDataStructurallyTouched(rIdx, cIdx);
                                 return (
                                   <td
                                     key={cIdx}
                                     className={cn(
                                       "px-3 py-2 text-xs border-r border-slate-200 font-mono text-center whitespace-nowrap min-w-[100px]",
-                                      isCorrected ? "bg-amber-100 text-amber-950 font-bold border-amber-300 relative outline outline-2 outline-amber-400" : "text-slate-700"
+                                      isModified ? "bg-rose-50 border-rose-300 outline outline-2 outline-rose-400" : "text-slate-700",
+                                      isDataTouched ? "bg-sky-50 text-sky-900 border-sky-300 outline outline-2 outline-sky-400" : ""
                                     )}
                                   >
-                                    {isCorrected ? verifyModal.correction?.valeur_corrigee : cell}
+                                    {isModified ? (
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <span className="line-through text-rose-500 text-[10px]">{String(cell ?? '') || "(Vide)"}</span>
+                                        <span className="text-amber-700 font-bold bg-amber-100 px-1.5 py-0.5 rounded text-[10px]">
+                                          ➔ {verifyModal.correction?.valeur_corrigee}
+                                        </span>
+                                      </div>
+                                    ) : isDataTouched ? (
+                                      <div className="flex flex-col items-center gap-1">
+                                        <span>{String(cell ?? '') || "(Vide)"}</span>
+                                        <span className="text-sky-800 font-bold bg-sky-100 px-1.5 py-0.5 rounded text-[10px]">
+                                          {getDataStructuralLabel()}
+                                        </span>
+                                      </div>
+                                    ) : String(cell ?? '')}
                                   </td>
                                 );
                               })}
@@ -588,22 +837,22 @@ export default function Validation() {
                       </table>
 
                       {/* Notes du tableau */}
-                      {(verifyModal.tableau.notes_fr || verifyModal.tableau.notes_ar) && (
+                      {(displayTableau.notes_fr || displayTableau.notes_ar) && (
                         <div className="p-4 bg-slate-50 border-t border-slate-200 text-xs space-y-2 mt-4">
                           <h4 className="font-semibold text-slate-800 flex items-center gap-1.5">
                             <MessageSquare className="h-3.5 w-3.5 text-indigo-500" />
                             Notes / Remarques :
                           </h4>
-                          {verifyModal.tableau.notes_fr && (
+                          {displayTableau.notes_fr && (
                             <p className="text-slate-600 leading-relaxed font-medium">
                               <span className="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded mr-1.5 uppercase font-bold">FR</span>
-                              {verifyModal.tableau.notes_fr}
+                              {displayTableau.notes_fr}
                             </p>
                           )}
-                          {verifyModal.tableau.notes_ar && (
+                          {displayTableau.notes_ar && (
                             <p className="text-slate-600 leading-relaxed font-medium text-right" dir="rtl">
                               <span className="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded ml-1.5 uppercase font-bold" dir="ltr">AR</span>
-                              {verifyModal.tableau.notes_ar}
+                              {displayTableau.notes_ar}
                             </p>
                           )}
                         </div>

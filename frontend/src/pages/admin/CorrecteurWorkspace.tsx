@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { annuaires, thematiques, tableaux, corrections, getCurrentUser } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -9,25 +9,29 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   FileText, 
-  ExternalLink, 
   History, 
   Save, 
-  CheckCircle2, 
   AlertCircle, 
   Edit3, 
-  Filter, 
   Loader2, 
   FileSearch,
-  Sparkles,
   Link2,
   Calendar,
   Layers,
   Table as TableIcon,
   Pencil,
   Plus,
-  Trash2
+  Trash2,
+  MergeIcon,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  RowsIcon,
+  Columns3
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -160,6 +164,43 @@ export default function CorrecteurWorkspace() {
     notes: [],
     originalNotes: []
   });
+
+  // ── Structural operation state ───────────────────────────────────────────
+  // Header cell selection for merge (click-drag simulation via shift-click)
+  const [headerSelection, setHeaderSelection] = useState<{
+    anchor: { row: number; col: number } | null;
+    focus:  { row: number; col: number } | null;
+  }>({ anchor: null, focus: null });
+
+  // Merge header cells modal
+  const [mergeModal, setMergeModal] = useState<{
+    open: boolean;
+    start_row: number; start_col: number;
+    end_row: number;   end_col: number;
+    commentaire: string;
+  }>({ open: false, start_row: 0, start_col: 0, end_row: 0, end_col: 0, commentaire: '' });
+
+  // Row-action context for data rows (insert / delete)
+  const [rowActionModal, setRowActionModal] = useState<{
+    open: boolean;
+    action: 'insert_before' | 'insert_after' | 'delete';
+    row_index: number;
+    commentaire: string;
+  }>({ open: false, action: 'insert_before', row_index: 0, commentaire: '' });
+
+  // Whether the table is in "structural edit" mode (shows move arrows + selection)
+  const [structuralMode, setStructuralMode] = useState(false);
+
+  // Track which header cells and data rows were structurally modified this session.
+  // Stored as sets of "rIdx-cIdx" keys for headers, and row indices for inserted rows.
+  // We use a simple boolean + correctionHistory to derive highlights.
+  const [hasStructuralChanges, setHasStructuralChanges] = useState(false);
+
+  // Reset when tableau changes
+  useEffect(() => {
+    setHasStructuralChanges(false);
+    setStructuralMode(false);
+  }, [selectedTableauId]);
 
   // Parse notes_fr (JSON array or plain string) into structured list
   const notesList = useMemo(() => {
@@ -431,6 +472,162 @@ export default function CorrecteurWorkspace() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // ── Structural helpers ───────────────────────────────────────────────────
+
+  // Compute the normalised selection rectangle from anchor+focus
+  const selectionRect = useMemo(() => {
+    if (!headerSelection.anchor || !headerSelection.focus) return null;
+    return {
+      start_row: Math.min(headerSelection.anchor.row, headerSelection.focus.row),
+      end_row:   Math.max(headerSelection.anchor.row, headerSelection.focus.row),
+      start_col: Math.min(headerSelection.anchor.col, headerSelection.focus.col),
+      end_col:   Math.max(headerSelection.anchor.col, headerSelection.focus.col),
+    };
+  }, [headerSelection]);
+
+  const isCellSelected = (rIdx: number, cIdx: number) => {
+    if (!selectionRect) return false;
+    return (
+      rIdx >= selectionRect.start_row && rIdx <= selectionRect.end_row &&
+      cIdx >= selectionRect.start_col && cIdx <= selectionRect.end_col
+    );
+  };
+
+  // Handle a header cell click in structural mode (anchor / extend selection)
+  const handleHeaderStructuralClick = (rIdx: number, cIdx: number, e: React.MouseEvent) => {
+    if (!structuralMode) return;
+    e.stopPropagation();
+    if (!headerSelection.anchor || !e.shiftKey) {
+      setHeaderSelection({ anchor: { row: rIdx, col: cIdx }, focus: { row: rIdx, col: cIdx } });
+    } else {
+      setHeaderSelection(prev => ({ ...prev, focus: { row: rIdx, col: cIdx } }));
+    }
+  };
+
+  // Open merge modal from current selection
+  const openMergeFromSelection = () => {
+    if (!selectionRect) return;
+    if (selectionRect.start_row === selectionRect.end_row && selectionRect.start_col === selectionRect.end_col) {
+      toast.warning('Sélectionnez au moins 2 cellules pour fusionner.');
+      return;
+    }
+    setMergeModal({ open: true, commentaire: '', ...selectionRect });
+  };
+
+  // Execute a structural operation
+  const handleStructuralOp = useCallback(async (
+    payload: Parameters<typeof corrections.saveStructuralCorrection>[1]
+  ) => {
+    if (!currentTableau) return;
+    try {
+      setSubmitting(true);
+      const res = await corrections.saveStructuralCorrection(currentTableau.id, {
+        ...payload,
+        user_display_name: currentUserDisplayName,
+      });
+      setCurrentTableau(res.tableau);
+      setCorrectionHistory(prev => [res.correction, ...prev]);
+      setHeaderSelection({ anchor: null, focus: null });
+      setHasStructuralChanges(true);
+      toast.success('Opération structurelle enregistrée.');
+    } catch (err: any) {
+      toast.error("Erreur lors de l'opération", { description: err.message });
+    } finally {
+      setSubmitting(false);
+    }
+  }, [currentTableau, currentUserDisplayName]);
+
+  // Save merge from modal
+  const handleSaveMerge = async () => {
+    await handleStructuralOp({
+      type_operation: 'entete_merge_cells',
+      start_row: mergeModal.start_row,
+      start_col: mergeModal.start_col,
+      end_row:   mergeModal.end_row,
+      end_col:   mergeModal.end_col,
+      commentaire: mergeModal.commentaire,
+    });
+    setMergeModal(prev => ({ ...prev, open: false }));
+  };
+
+  // Move header row up/down
+  const handleMoveHeaderRow = async (rIdx: number, direction: 'up' | 'down') => {
+    await handleStructuralOp({ type_operation: 'entete_move_row', row_index: rIdx, direction });
+  };
+
+  // Move column left/right (operates on headers + data)
+  const handleMoveCol = async (cIdx: number, direction: 'left' | 'right') => {
+    await handleStructuralOp({ type_operation: 'entete_move_col', col_index: cIdx, direction });
+  };
+
+  // Unmerge: remove the fusion rule covering the selected cell
+  const handleUnmerge = async (rIdx: number, cIdx: number) => {
+    await handleStructuralOp({ type_operation: 'entete_unmerge_cells', row_index: rIdx, col_index: cIdx });
+  };
+
+  // Insert / delete header row
+  const handleInsertHeaderRow = async (rIdx: number) => {
+    await handleStructuralOp({ type_operation: 'entete_insert_row', row_index: rIdx });
+  };
+
+  const handleDeleteHeaderRow = async (rIdx: number) => {
+    await handleStructuralOp({ type_operation: 'entete_delete_row', row_index: rIdx });
+  };
+
+  // Insert / delete column (in headers + data)
+  const handleInsertCol = async (cIdx: number) => {
+    await handleStructuralOp({ type_operation: 'entete_insert_col', col_index: cIdx });
+  };
+
+  const handleDeleteCol = async (cIdx: number) => {
+    await handleStructuralOp({ type_operation: 'entete_delete_col', col_index: cIdx });
+  };
+
+  // Check if a single selected cell is part of a merge rule (for Unmerge button)
+  const selectedCellMergeRule = useMemo(() => {
+    if (!selectionRect) return null;
+    if (selectionRect.start_row !== selectionRect.end_row || selectionRect.start_col !== selectionRect.end_col) return null;
+    const rIdx = selectionRect.start_row;
+    const cIdx = selectionRect.start_col;
+    const list = currentTableau?.merged_cells
+      ? (typeof currentTableau.merged_cells === 'string'
+          ? JSON.parse(currentTableau.merged_cells)
+          : currentTableau.merged_cells)
+      : [];
+    return list.find((mc: any) => {
+      const rangeStr: string = mc.range || '';
+      const m = rangeStr.match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/i);
+      if (!m) return false;
+      const colLetterToIdxLocal = (s: string) => {
+        let idx = 0; const str = s.toUpperCase();
+        for (let i = 0; i < str.length; i++) idx = idx * 26 + (str.charCodeAt(i) - 65 + 1);
+        return idx - 1;
+      };
+      const mcSC = colLetterToIdxLocal(m[1]);
+      const mcSR = parseInt(m[2], 10) - 1;
+      const mcEC = colLetterToIdxLocal(m[3] || m[1]);
+      const mcER = parseInt(m[4] || m[2], 10) - 1;
+      return rIdx >= mcSR && rIdx <= mcER && cIdx >= mcSC && cIdx <= mcEC;
+    }) ?? null;
+  }, [selectionRect, currentTableau?.merged_cells]);
+
+  // Open row-action modal for data rows
+  const openRowActionModal = (rIdx: number, action: 'insert_before' | 'insert_after' | 'delete') => {
+    setRowActionModal({ open: true, action, row_index: rIdx, commentaire: '' });
+  };
+
+  // Confirm row action
+  const handleConfirmRowAction = async () => {
+    const { action, row_index, commentaire } = rowActionModal;
+    if (action === 'delete') {
+      await handleStructuralOp({ type_operation: 'donnees_delete_row', row_index, commentaire });
+    } else {
+      const insertAt = action === 'insert_before' ? row_index : row_index + 1;
+      await handleStructuralOp({ type_operation: 'donnees_insert_row', row_index: insertAt, commentaire });
+    }
+    setRowActionModal(prev => ({ ...prev, open: false }));
   };
 
   // Check if a cell has been corrected
@@ -749,54 +946,363 @@ export default function CorrecteurWorkspace() {
                   </Card>
 
                   {/* Interactive Table Grid */}
-                  <Card className="rounded-2xl border-slate-200 shadow-sm overflow-hidden">
-                    <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
+                  <Card className={`rounded-2xl shadow-sm overflow-hidden transition-all ${
+                    hasStructuralChanges && !structuralMode
+                      ? 'border-2 border-violet-400'
+                      : 'border border-slate-200'
+                  }`}>
+                    <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
                       <span className="font-semibold text-slate-700">
-                        Cliquez sur une cellule pour modifier sa valeur et enregistrer la traçabilité.
+                        {structuralMode
+                          ? 'Mode Édition Structurelle — cliquez sur les en-têtes pour les sélectionner'
+                          : 'Cliquez sur une cellule pour modifier sa valeur et enregistrer la traçabilité.'}
                       </span>
-                      <span className="text-[10px] text-emerald-600 font-medium">
-                        ● Cellules vertes = Corrigées
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {hasStructuralChanges && !structuralMode && (
+                          <span className="flex items-center gap-1 text-[10px] font-semibold text-violet-700 bg-violet-50 border border-violet-300 px-2 py-0.5 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+                            Structure modifiée
+                          </span>
+                        )}
+                        <span className="text-[10px] text-emerald-600 font-medium">● Vert = Corrigé</span>
+                        <Button
+                          size="sm"
+                          variant={structuralMode ? 'default' : 'outline'}
+                          className={`h-7 text-[11px] gap-1.5 rounded-xl ${structuralMode ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'border-indigo-300 text-indigo-700 hover:bg-indigo-50'}`}
+                          onClick={() => {
+                            setStructuralMode(v => !v);
+                            setHeaderSelection({ anchor: null, focus: null });
+                          }}
+                        >
+                          <Columns3 className="h-3.5 w-3.5" />
+                          {structuralMode ? 'Quitter mode structurel' : 'Édition structurelle'}
+                        </Button>
+                      </div>
                     </div>
+
+                    {/* Violet banner — structural changes indicator */}
+                    {hasStructuralChanges && !structuralMode && (
+                      <div className="px-4 py-2 bg-violet-50 border-b border-violet-200 flex items-center gap-2 text-xs text-violet-800">
+                        <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" />
+                        <span className="font-semibold">Violet = Structure modifiée</span>
+                      </div>
+                    )}
+
+                    {/* Structural toolbar — only visible in structural mode */}
+                    {structuralMode && (
+                      <TooltipProvider delayDuration={200}>
+                        <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-indigo-50 border-b border-indigo-200">
+                          <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider mr-1">En-têtes</span>
+
+                          {/* Merge */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[11px] gap-1 rounded-lg border-indigo-300 text-indigo-800 hover:bg-indigo-100 disabled:opacity-40"
+                                disabled={!selectionRect || (selectionRect.start_row === selectionRect.end_row && selectionRect.start_col === selectionRect.end_col) || submitting}
+                                onClick={openMergeFromSelection}
+                              >
+                                <MergeIcon className="h-3.5 w-3.5" />
+                                Fusionner
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">Cliquez une cellule, Shift+clic pour étendre, puis fusionnez</TooltipContent>
+                          </Tooltip>
+
+                          {/* Unmerge */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[11px] gap-1 rounded-lg border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-40"
+                                disabled={!selectedCellMergeRule || submitting}
+                                onClick={() => {
+                                  if (selectionRect) handleUnmerge(selectionRect.start_row, selectionRect.start_col);
+                                }}
+                              >
+                                <ArrowLeft className="h-3 w-3" /><ArrowRight className="h-3 w-3 -ml-1.5" />
+                                Annuler fusion
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">
+                              {selectedCellMergeRule ? `Annuler la fusion ${selectedCellMergeRule.range}` : 'Sélectionnez une cellule fusionnée'}
+                            </TooltipContent>
+                          </Tooltip>
+
+                          <div className="w-px h-5 bg-indigo-200" />
+
+                          {/* Insert col before */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[11px] gap-1 rounded-lg border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-40"
+                                disabled={!selectionRect || submitting}
+                                onClick={() => selectionRect && handleInsertCol(selectionRect.start_col)}
+                              >
+                                <Plus className="h-3.5 w-3.5" />Col avant
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">Insérer une colonne vide avant la colonne sélectionnée</TooltipContent>
+                          </Tooltip>
+
+                          {/* Insert col after */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[11px] gap-1 rounded-lg border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-40"
+                                disabled={!selectionRect || submitting}
+                                onClick={() => selectionRect && handleInsertCol(selectionRect.end_col + 1)}
+                              >
+                                <Plus className="h-3.5 w-3.5" />Col après
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">Insérer une colonne vide après la colonne sélectionnée</TooltipContent>
+                          </Tooltip>
+
+                          {/* Delete col */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[11px] gap-1 rounded-lg border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-40"
+                                disabled={!selectionRect || selectionRect.start_col !== selectionRect.end_col || submitting}
+                                onClick={() => selectionRect && handleDeleteCol(selectionRect.start_col)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />Suppr. col
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">Supprimer la colonne sélectionnée (sélectionnez une seule colonne)</TooltipContent>
+                          </Tooltip>
+
+                          {selectionRect && (
+                            <>
+                              <div className="w-px h-5 bg-indigo-200" />
+                              <Badge variant="outline" className="text-[10px] bg-white border-indigo-300 text-indigo-700 font-mono">
+                                Sél: L{selectionRect.start_row + 1}C{selectionRect.start_col + 1}
+                                {(selectionRect.start_row !== selectionRect.end_row || selectionRect.start_col !== selectionRect.end_col) &&
+                                  ` → L${selectionRect.end_row + 1}C${selectionRect.end_col + 1}`}
+                              </Badge>
+                              {selectedCellMergeRule && (
+                                <Badge variant="outline" className="text-[10px] bg-orange-50 border-orange-300 text-orange-700">
+                                  Fusion: {selectedCellMergeRule.range}
+                                </Badge>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-[11px] text-slate-500 hover:text-red-600 rounded-lg"
+                                onClick={() => setHeaderSelection({ anchor: null, focus: null })}
+                              >
+                                ✕ Effacer
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TooltipProvider>
+                    )}
 
                     <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                       <table className="w-full text-xs text-left border-collapse">
                         {/* Headers */}
                         {headersList.length > 0 && (
-                          <thead className="sticky top-0 bg-slate-100 z-10 border-b border-slate-300">
+                          <thead className="sticky top-0 z-10 border-b border-slate-300">
                             {headersList.map((hRow: any[], rIdx: number) => (
                               <tr key={rIdx}>
+                                {/* Row-move + insert/delete controls column */}
+                                {structuralMode && (
+                                  <th className="p-1 bg-indigo-50 border-r border-indigo-200 w-14 text-center align-middle sticky left-0 z-20">
+                                    <TooltipProvider delayDuration={200}>
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost" size="icon"
+                                              className="h-5 w-5 hover:bg-indigo-200 text-indigo-700 rounded"
+                                              disabled={rIdx === 0 || submitting}
+                                              onClick={() => handleMoveHeaderRow(rIdx, 'up')}
+                                            >
+                                              <ArrowUp className="h-3 w-3" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="left" className="text-xs">Monter cette ligne</TooltipContent>
+                                        </Tooltip>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost" size="icon"
+                                              className="h-5 w-5 hover:bg-green-100 text-green-700 rounded"
+                                              disabled={submitting}
+                                              onClick={() => handleInsertHeaderRow(rIdx)}
+                                            >
+                                              <Plus className="h-3 w-3" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="left" className="text-xs">Insérer une ligne d'en-tête avant</TooltipContent>
+                                        </Tooltip>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost" size="icon"
+                                              className="h-5 w-5 hover:bg-red-100 text-red-600 rounded"
+                                              disabled={headersList.length <= 1 || submitting}
+                                              onClick={() => handleDeleteHeaderRow(rIdx)}
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="left" className="text-xs">Supprimer cette ligne d'en-tête</TooltipContent>
+                                        </Tooltip>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost" size="icon"
+                                              className="h-5 w-5 hover:bg-indigo-200 text-indigo-700 rounded"
+                                              disabled={rIdx === headersList.length - 1 || submitting}
+                                              onClick={() => handleMoveHeaderRow(rIdx, 'down')}
+                                            >
+                                              <ArrowDown className="h-3 w-3" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="left" className="text-xs">Descendre cette ligne</TooltipContent>
+                                        </Tooltip>
+                                      </div>
+                                    </TooltipProvider>
+                                  </th>
+                                )}
 
                                 {hRow.map((cell: any, cIdx: number) => {
                                   const mergeInfo = getMergeInfo(rIdx, cIdx);
-                                  if (mergeInfo.isMerged && !mergeInfo.isTopLeft) {
-                                    return null;
-                                  }
+                                  if (mergeInfo.isMerged && !mergeInfo.isTopLeft) return null;
                                   const cellText = String(cell || mergeInfo.value || '');
                                   const corrected = isHeaderCorrected(rIdx, cIdx);
+                                  const selected = isCellSelected(rIdx, cIdx);
+
                                   return (
                                     <th
                                       key={cIdx}
                                       rowSpan={mergeInfo.rowspan}
                                       colSpan={mergeInfo.colspan}
-                                      onClick={() => handleHeaderClick(rIdx, cIdx, cellText)}
-                                      className={`p-2.5 font-bold text-slate-800 border-r border-b border-slate-300 whitespace-pre-line text-center align-middle cursor-pointer transition-all ${
-                                        corrected
-                                          ? 'bg-emerald-100/80 border-emerald-400 text-emerald-950 shadow-inner'
-                                          : 'bg-slate-100/90 hover:bg-[#EA580C]/10'
+                                      onClick={(e) => {
+                                        if (structuralMode) {
+                                          handleHeaderStructuralClick(rIdx, cIdx, e);
+                                        } else {
+                                          handleHeaderClick(rIdx, cIdx, cellText);
+                                        }
+                                      }}
+                                      className={`p-2.5 font-bold text-slate-800 border-r border-b border-slate-300 whitespace-pre-line text-center align-middle cursor-pointer transition-all select-none ${
+                                        selected
+                                          ? 'bg-indigo-200 border-indigo-400 text-indigo-900 ring-1 ring-inset ring-indigo-400'
+                                          : corrected
+                                          ? 'bg-emerald-100 border-emerald-400 text-emerald-950 shadow-inner'
+                                          : structuralMode
+                                          ? 'bg-indigo-50 hover:bg-indigo-100'
+                                          : hasStructuralChanges
+                                          ? 'bg-violet-100 border-violet-300 text-violet-900 hover:bg-violet-200'
+                                          : 'bg-slate-100 hover:bg-orange-50'
                                       }`}
-                                      title="Cliquer pour corriger cet en-tête"
+                                      title={structuralMode ? 'Cliquer pour sélectionner — Shift+clic pour étendre' : 'Cliquer pour corriger cet en-tête'}
                                     >
                                       <div className="flex items-center justify-center gap-1">
                                         <span>{cellText}</span>
-                                        {corrected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></span>}
+                                        {corrected && !selected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />}
+                                        {selected && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />}
                                       </div>
                                     </th>
                                   );
                                 })}
 
+                                {/* Column-move controls — only on last header row */}
+                                {structuralMode && rIdx === headersList.length - 1 && (
+                                  <th className="p-0 bg-indigo-50 border-l border-indigo-200 w-0" />
+                                )}
                               </tr>
                             ))}
+
+                            {/* Column move + insert/delete arrows row */}
+                            {structuralMode && headersList.length > 0 && (() => {
+                              const lastRow: any[] = headersList[headersList.length - 1];
+                              const totalCols = lastRow.length;
+                              return (
+                                <tr className="bg-indigo-50/80">
+                                  <th className="p-0 w-14 border-r border-indigo-200" /> {/* spacer for row-control col */}
+                                  {Array.from({ length: totalCols }).map((_, cIdx) => (
+                                    <th key={cIdx} className="p-0.5 border-r border-indigo-200 text-center">
+                                      <TooltipProvider delayDuration={200}>
+                                        <div className="flex flex-col items-center gap-0.5">
+                                          {/* Move col left/right */}
+                                          <div className="flex items-center gap-0.5">
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <Button
+                                                  variant="ghost" size="icon"
+                                                  className="h-5 w-5 hover:bg-indigo-200 text-indigo-700 rounded"
+                                                  disabled={cIdx === 0 || submitting}
+                                                  onClick={() => handleMoveCol(cIdx, 'left')}
+                                                >
+                                                  <ArrowLeft className="h-3 w-3" />
+                                                </Button>
+                                              </TooltipTrigger>
+                                              <TooltipContent side="bottom" className="text-xs">Déplacer colonne vers gauche</TooltipContent>
+                                            </Tooltip>
+                                            <span className="text-[9px] font-bold text-indigo-500 min-w-[1rem] text-center">{cIdx + 1}</span>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <Button
+                                                  variant="ghost" size="icon"
+                                                  className="h-5 w-5 hover:bg-indigo-200 text-indigo-700 rounded"
+                                                  disabled={cIdx === totalCols - 1 || submitting}
+                                                  onClick={() => handleMoveCol(cIdx, 'right')}
+                                                >
+                                                  <ArrowRight className="h-3 w-3" />
+                                                </Button>
+                                              </TooltipTrigger>
+                                              <TooltipContent side="bottom" className="text-xs">Déplacer colonne vers droite</TooltipContent>
+                                            </Tooltip>
+                                          </div>
+                                          {/* Insert col before / delete col */}
+                                          <div className="flex items-center gap-0.5">
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <Button
+                                                  variant="ghost" size="icon"
+                                                  className="h-5 w-5 hover:bg-green-100 text-green-700 rounded"
+                                                  disabled={submitting}
+                                                  onClick={() => handleInsertCol(cIdx)}
+                                                >
+                                                  <Plus className="h-3 w-3" />
+                                                </Button>
+                                              </TooltipTrigger>
+                                              <TooltipContent side="bottom" className="text-xs">Insérer une colonne avant</TooltipContent>
+                                            </Tooltip>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <Button
+                                                  variant="ghost" size="icon"
+                                                  className="h-5 w-5 hover:bg-red-100 text-red-600 rounded"
+                                                  disabled={totalCols <= 1 || submitting}
+                                                  onClick={() => handleDeleteCol(cIdx)}
+                                                >
+                                                  <Trash2 className="h-3 w-3" />
+                                                </Button>
+                                              </TooltipTrigger>
+                                              <TooltipContent side="bottom" className="text-xs">Supprimer cette colonne</TooltipContent>
+                                            </Tooltip>
+                                          </div>
+                                        </div>
+                                      </TooltipProvider>
+                                    </th>
+                                  ))}
+                                </tr>
+                              );
+                            })()}
                           </thead>
                         )}
 
@@ -804,26 +1310,88 @@ export default function CorrecteurWorkspace() {
                         <tbody>
                           {rowsList.map((dRow: any[], rIdx: number) => (
                             <tr key={rIdx} className="hover:bg-slate-50/80 border-b border-slate-200 transition-colors">
+                              {/* Row-action controls */}
+                              {structuralMode && (
+                                <td className="p-0.5 bg-indigo-50/50 border-r border-indigo-200 w-14 text-center align-middle">
+                                  <TooltipProvider delayDuration={200}>
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost" size="icon"
+                                            className="h-5 w-5 hover:bg-green-100 text-green-700 rounded"
+                                            disabled={submitting}
+                                            onClick={() => openRowActionModal(rIdx, 'insert_before')}
+                                          >
+                                            <Plus className="h-3 w-3" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="left" className="text-xs">Insérer une ligne avant</TooltipContent>
+                                      </Tooltip>
+                                      <span className="text-[9px] font-bold text-slate-400">{rIdx + 1}</span>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost" size="icon"
+                                            className="h-5 w-5 hover:bg-red-100 text-red-600 rounded"
+                                            disabled={submitting}
+                                            onClick={() => openRowActionModal(rIdx, 'delete')}
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="left" className="text-xs">Supprimer cette ligne</TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  </TooltipProvider>
+                                </td>
+                              )}
+
                               {dRow.map((cellVal: any, cIdx: number) => {
                                 const corrected = isCellCorrected(rIdx, cIdx);
                                 return (
                                   <td
                                     key={cIdx}
-                                    onClick={() => handleCellClick(rIdx, cIdx, cellVal)}
-                                    className={`p-2 border-r border-slate-200 cursor-pointer text-slate-900 transition-all ${
-                                      corrected 
-                                        ? 'bg-emerald-100/80 font-bold border-emerald-400 text-emerald-950 shadow-inner' 
-                                        : 'hover:bg-[#EA580C]/10 hover:font-semibold'
+                                    onClick={() => !structuralMode && handleCellClick(rIdx, cIdx, cellVal)}
+                                    className={`p-2 border-r border-slate-200 text-slate-900 transition-all ${
+                                      structuralMode
+                                        ? 'cursor-default'
+                                        : corrected
+                                        ? 'bg-emerald-100/80 font-bold border-emerald-400 text-emerald-950 shadow-inner cursor-pointer'
+                                        : hasStructuralChanges
+                                        ? 'bg-violet-50/60 border-violet-100 hover:bg-violet-100 cursor-pointer'
+                                        : 'hover:bg-[#EA580C]/10 hover:font-semibold cursor-pointer'
                                     }`}
-                                    title="Cliquer pour corriger cette cellule"
+                                    title={!structuralMode ? 'Cliquer pour corriger cette cellule' : undefined}
                                   >
                                     <div className="flex items-center justify-between gap-1">
                                       <span>{String(cellVal ?? '')}</span>
-                                      {corrected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></span>}
+                                      {corrected && !structuralMode && <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />}
                                     </div>
                                   </td>
                                 );
                               })}
+
+                              {/* Insert-after button on last data cell */}
+                              {structuralMode && (
+                                <td className="p-0.5 bg-indigo-50/50 border-l border-indigo-200 text-center align-middle w-6">
+                                  <TooltipProvider delayDuration={200}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost" size="icon"
+                                          className="h-5 w-5 hover:bg-green-100 text-green-600 rounded"
+                                          disabled={submitting}
+                                          onClick={() => openRowActionModal(rIdx, 'insert_after')}
+                                        >
+                                          <Plus className="h-3 w-3" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="right" className="text-xs">Insérer une ligne après</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </tbody>
@@ -1199,6 +1767,112 @@ export default function CorrecteurWorkspace() {
               <Button size="sm" onClick={handleSavePdfUrl} disabled={submitting} className="rounded-xl text-xs gap-2 bg-[#EA580C] hover:bg-[#9A3412] text-white">
                 {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 Associer l'URL
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal: Merge header cells */}
+        <Dialog open={mergeModal.open} onOpenChange={(open) => setMergeModal(prev => ({ ...prev, open }))}>
+          <DialogContent className="max-w-sm rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <MergeIcon className="h-4 w-4 text-indigo-600" />
+                Fusionner les cellules d'en-tête
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-200 text-xs text-indigo-800 font-mono space-y-1">
+                <p><span className="font-bold">Plage sélectionnée :</span></p>
+                <p>
+                  Ligne {mergeModal.start_row + 1}, Col {mergeModal.start_col + 1}
+                  {' → '}
+                  Ligne {mergeModal.end_row + 1}, Col {mergeModal.end_col + 1}
+                </p>
+                <p className="text-indigo-600 text-[10px]">
+                  {(mergeModal.end_row - mergeModal.start_row + 1)} ligne(s) × {(mergeModal.end_col - mergeModal.start_col + 1)} colonne(s)
+                </p>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                La valeur de la cellule en haut à gauche sera conservée. Les autres cellules de la plage seront vidées.
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">Commentaire (optionnel)</Label>
+                <Textarea
+                  value={mergeModal.commentaire}
+                  onChange={(e) => setMergeModal(prev => ({ ...prev, commentaire: e.target.value }))}
+                  placeholder="Ex: Fusion pour regrouper les sous-catégories..."
+                  className="rounded-xl text-xs h-16"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => setMergeModal(prev => ({ ...prev, open: false }))} className="rounded-xl text-xs">
+                Annuler
+              </Button>
+              <Button size="sm" onClick={handleSaveMerge} disabled={submitting} className="rounded-xl text-xs gap-2 bg-indigo-600 hover:bg-indigo-700 text-white">
+                {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MergeIcon className="h-3.5 w-3.5" />}
+                Confirmer la fusion
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal: Insert / Delete data row */}
+        <Dialog open={rowActionModal.open} onOpenChange={(open) => setRowActionModal(prev => ({ ...prev, open }))}>
+          <DialogContent className="max-w-sm rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+                {rowActionModal.action === 'delete'
+                  ? <><Trash2 className="h-4 w-4 text-red-600" /> Supprimer la ligne {rowActionModal.row_index + 1}</>
+                  : <><RowsIcon className="h-4 w-4 text-green-600" /> Insérer une ligne {rowActionModal.action === 'insert_before' ? 'avant' : 'après'} la ligne {rowActionModal.row_index + 1}</>}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              {rowActionModal.action === 'delete' ? (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800">
+                  Cette action supprimera définitivement la ligne {rowActionModal.row_index + 1} du tableau de données.
+                  L'opération est tracée dans le journal d'audit.
+                </div>
+              ) : (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-xs text-green-800">
+                  Une ligne vide sera insérée {rowActionModal.action === 'insert_before' ? 'avant' : 'après'} la ligne {rowActionModal.row_index + 1}.
+                  Vous pourrez ensuite modifier ses valeurs cellule par cellule.
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">Commentaire (optionnel)</Label>
+                <Textarea
+                  value={rowActionModal.commentaire}
+                  onChange={(e) => setRowActionModal(prev => ({ ...prev, commentaire: e.target.value }))}
+                  placeholder="Raison de la modification..."
+                  className="rounded-xl text-xs h-16"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => setRowActionModal(prev => ({ ...prev, open: false }))} className="rounded-xl text-xs">
+                Annuler
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleConfirmRowAction}
+                disabled={submitting}
+                className={`rounded-xl text-xs gap-2 text-white ${rowActionModal.action === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+              >
+                {submitting
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : rowActionModal.action === 'delete'
+                  ? <Trash2 className="h-3.5 w-3.5" />
+                  : <Plus className="h-3.5 w-3.5" />}
+                {rowActionModal.action === 'delete' ? 'Supprimer la ligne' : 'Insérer la ligne'}
               </Button>
             </DialogFooter>
           </DialogContent>
