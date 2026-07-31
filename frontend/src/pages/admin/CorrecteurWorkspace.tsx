@@ -1498,14 +1498,14 @@ export default function CorrecteurWorkspace() {
                       <p className="text-sm font-medium text-slate-300">
                         Aucun lien PDF associé à l'annuaire de l'année {selectedAnnee}.
                       </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPdfUrlModal({ open: true, url: '' })}
-                        className="rounded-xl border-slate-700 text-slate-200 hover:bg-slate-800 gap-2 text-xs"
-                      >
-                        <Link2 className="h-3.5 w-3.5" /> Assigner une URL PDF
-                      </Button>
+                      <Button variant="outline"
+  size="sm"
+  onClick={() => setPdfUrlModal({ open: true, url: '' })}
+  className="rounded-xl bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700 hover:text-white gap-2 text-xs"
+>
+  <Link2 className="h-3.5 w-3.5" />
+  Assigner une URL PDF
+</Button>
                     </div>
                   )}
                 </CardContent>
@@ -1535,12 +1535,23 @@ export default function CorrecteurWorkspace() {
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-700">Nouvelle valeur corrigée *</Label>
                 <Input
-                  value={editCellModal.valeur_corrigee}
-                  onChange={(e) => setEditCellModal(prev => ({ ...prev, valeur_corrigee: e.target.value }))}
-                  placeholder="Saisissez la valeur exacte..."
-                  className="rounded-xl"
-                  autoFocus
-                />
+  value={editCellModal.valeur_corrigee}
+  onChange={(e) =>
+    setEditCellModal(prev => ({
+      ...prev,
+      valeur_corrigee: e.target.value
+    }))
+  }
+  onKeyDown={(e) => {
+    if (e.key === "Enter" && !submitting) {
+      e.preventDefault(); // empêche le comportement par défaut
+      handleSaveCellCorrection();
+    }
+  }}
+  placeholder="Saisissez la valeur exacte..."
+  className="rounded-xl"
+  autoFocus
+/>
               </div>
 
               <div className="space-y-1">
@@ -1753,11 +1764,23 @@ export default function CorrecteurWorkspace() {
             <div className="space-y-3 py-2">
               <Label className="text-xs font-semibold text-slate-700">URL du fichier PDF</Label>
               <Input
-                value={pdfUrlModal.url}
-                onChange={(e) => setPdfUrlModal(prev => ({ ...prev, url: e.target.value }))}
-                placeholder="https://www.hcp.ma/file/..."
-                className="rounded-xl text-xs"
-              />
+  value={pdfUrlModal.url}
+  onChange={(e) =>
+    setPdfUrlModal(prev => ({
+      ...prev,
+      url: e.target.value
+    }))
+  }
+  onKeyDown={(e) => {
+    if (e.key === "Enter" && !submitting) {
+      e.preventDefault();
+      handleSavePdfUrl();
+    }
+  }}
+  placeholder="https://www.hcp.ma/file/..."
+  className="rounded-xl text-xs"
+  autoFocus
+/>
             </div>
 
             <DialogFooter className="gap-2">

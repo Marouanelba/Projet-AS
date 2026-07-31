@@ -814,10 +814,17 @@ export default function Validation() {
                                     )}
                                   >
                                     {isModified ? (
-                                      <div className="flex flex-col items-center gap-0.5">
-                                        <span className="line-through text-rose-500 text-[10px]">{String(cell ?? '') || "(Vide)"}</span>
-                                        <span className="text-amber-700 font-bold bg-amber-100 px-1.5 py-0.5 rounded text-[10px]">
-                                          ➔ {verifyModal.correction?.valeur_corrigee}
+  <div className="flex flex-col items-center gap-0.5">
+    <span className="line-through text-rose-500 text-[10px]">
+      {String(
+        verifyModal.correction?.valeur_originale ??
+        cell ??
+        "(Vide)"
+      )}
+    </span>
+
+    <span className="text-amber-700 font-bold bg-amber-100 px-1.5 py-0.5 rounded text-[10px]">
+      ➔ {verifyModal.correction?.valeur_corrigee}
                                         </span>
                                       </div>
                                     ) : isDataTouched ? (
