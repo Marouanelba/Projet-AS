@@ -7,7 +7,8 @@ import {
   extractIndiceFromTitle, 
   normalizeForComparison, 
   normalizeCode,
-  generateGroupKey 
+  generateGroupKey,
+  isFragmentTitle 
 } from '@/lib/indicateur-utils';
 import { getThematiqueIcon } from '@/lib/thematique-icons';
 import { Button } from '@/components/ui/button';
@@ -192,14 +193,19 @@ const Indicateurs = () => {
       };
     });
 
+    // Filtrer les indicateurs dont le titre nettoyé est vide ou qui sont des fragments/sous-sections
+    const valid = processed.filter(ind => 
+      ind.titreClean.trim().length > 0 && !isFragmentTitle(ind.titreOriginal)
+    );
+
     // Trier par titre clean puis par année décroissante
-    processed.sort((a, b) => {
+    valid.sort((a, b) => {
       const titleCompare = a.titreClean.localeCompare(b.titreClean);
       if (titleCompare !== 0) return titleCompare;
       return b.annuaireAnnee.localeCompare(a.annuaireAnnee);
     });
 
-    setIndicateurs(processed);
+    setIndicateurs(valid);
     setLoading(false);
   };
 

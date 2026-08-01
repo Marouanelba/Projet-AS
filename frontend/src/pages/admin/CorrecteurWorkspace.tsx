@@ -1542,6 +1542,7 @@ export default function CorrecteurWorkspace() {
       valeur_corrigee: e.target.value
     }))
   }
+  onFocus={(e) => e.target.select()}
   onKeyDown={(e) => {
     if (e.key === "Enter" && !submitting) {
       e.preventDefault(); // empêche le comportement par défaut
@@ -1600,6 +1601,7 @@ export default function CorrecteurWorkspace() {
                 <Input
                   value={editHeaderModal.valeur_corrigee}
                   onChange={(e) => setEditHeaderModal(prev => ({ ...prev, valeur_corrigee: e.target.value }))}
+                  onFocus={(e) => e.target.select()}
                   placeholder="Saisissez la valeur exacte de l'en-tête..."
                   className="rounded-xl"
                   autoFocus

@@ -4,6 +4,26 @@
  */
 
 /**
+ * Détecte si un titre est un fragment/sous-section plutôt qu'un vrai titre de tableau.
+ * Les sous-sections ont typiquement un pattern comme "1 - Production" ou "2 - Consommation et abonnés"
+ * qui sont des labels de sous-parties extraits par erreur comme des tableaux séparés.
+ * 
+ * On considère comme fragment un titre qui :
+ * - Commence par un simple numéro + tiret (ex: "1 - ", "2 - ")
+ * - N'a PAS de préfixe double type "X - Y" (ce qui serait un vrai code de tableau)
+ */
+export const isFragmentTitle = (titre: string): boolean => {
+  if (!titre) return false;
+  // Pattern: commence par 1 ou 2 chiffres, tiret, puis texte court (pas un code type "5-1 Titre")
+  // Un vrai titre a le pattern "X - Y Titre" (deux numéros)
+  // Un fragment a "X - Texte" (un seul numéro avant le tiret, puis directement du texte non-numérique)
+  const fragmentPattern = /^\s*\d{1,2}\s*[-–—]\s*[A-Za-zÀ-ÿ]/;
+  const realCodePattern = /^\s*\d+\s*[-–—]\s*\d/;
+  
+  return fragmentPattern.test(titre) && !realCodePattern.test(titre);
+};
+
+/**
  * Normalise une chaîne pour comparaison/regroupement
  * - Supprime les accents (É -> E, è -> e, etc.)
  * - Met en minuscule
@@ -40,6 +60,9 @@ export const cleanIndicateurTitle = (
   // D'abord, supprime le préfixe numéroté comme "2 - 1 ", "1-2 ", "2-10 -", etc.
   let cleaned = titre.replace(/^\d+\s*[-–]\s*\d+\s*[-–]?\s*/gi, '').trim();
 
+  // Supprime les caractères de ponctuation résiduels en début de titre (: - — –)
+  cleaned = cleaned.replace(/^[:\-–—]\s*/, '').trim();
+
   // Supprime les suffixes d'unités comme (en milliers), (en %), etc.
   // MAIS on garde les indices numériques comme (1), (2) par défaut
   cleaned = cleaned
@@ -58,6 +81,13 @@ export const cleanIndicateurTitle = (
     cleaned = cleaned
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  // Si le nettoyage a vidé le titre, revenir au titre original (nettoyé des accents si demandé)
+  if (!cleaned.trim()) {
+    cleaned = normalizeAccents
+      ? titre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+      : titre.trim();
   }
 
   return cleaned;
