@@ -684,6 +684,12 @@ export default function Validation() {
             <span className="text-xs text-slate-500 mt-1">
               {verifyModal.correction?.tableau_titre}
             </span>
+            {verifyModal.correction?.annuaire_annee && (
+              <span className="text-xs text-indigo-600 font-medium mt-1">
+                <Calendar className="inline h-3.5 w-3.5 mr-1" />
+                Annuaire Statistique {verifyModal.correction.annuaire_annee}
+              </span>
+            )}
           </DialogHeader>
 
           {verifyModal.loading ? (

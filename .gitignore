@@ -43,3 +43,9 @@ bun.lockb
 # OS files
 *.DS_Store
 desktop.ini
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
