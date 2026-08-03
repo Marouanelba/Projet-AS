@@ -50,22 +50,38 @@ router.post('/clear-tables', requireAuth, async (req: AuthRequest, res: Response
  * Remplace la edge function import-data de Supabase
  */
 router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
+  // mode 'replace' (défaut) : les tableaux d'une thématique sont supprimés
+  // avant réinsertion, sinon un réimport les dupliquerait — il n'existe aucune
+  // clé fiable pour les mettre à jour en place (le code est construit sur
+  // table_number, faux dans plusieurs chapitres).
+  // mode 'append' : ancien comportement, ajoute sans supprimer.
+  const { type, data, mode = 'replace' } = req.body;
+
+  if (!type || !data) {
+    res.status(400).json({ error: 'type et data requis' });
+    return;
+  }
+  if (mode !== 'replace' && mode !== 'append') {
+    res.status(400).json({ error: `mode inconnu: ${mode}. Utilisez "replace" ou "append".` });
+    return;
+  }
+
+  const results = {
+    type,
+    mode,
+    annuaires: { inserted: 0, errors: [] as string[] },
+    thematiques: { inserted: 0, errors: [] as string[] },
+    indicateurs: { inserted: 0, errors: [] as string[] },
+    indices: { inserted: 0, errors: [] as string[] },
+    data: { inserted: 0, errors: [] as string[] },
+    supprimes: 0,
+  };
+
+  // Tout l'import dans une transaction : un échec en cours de route ne doit
+  // pas laisser un chapitre à moitié remplacé.
+  const client = await pool.connect();
   try {
-    const { type, data } = req.body;
-
-    if (!type || !data) {
-      res.status(400).json({ error: 'type et data requis' });
-      return;
-    }
-
-    const results = {
-      type,
-      annuaires: { inserted: 0, errors: [] as string[] },
-      thematiques: { inserted: 0, errors: [] as string[] },
-      indicateurs: { inserted: 0, errors: [] as string[] },
-      indices: { inserted: 0, errors: [] as string[] },
-      data: { inserted: 0, errors: [] as string[] },
-    };
+    await client.query('BEGIN');
 
     if (type === 'metadata') {
       // Import des métadonnées (annuaires + thématiques)
@@ -73,61 +89,44 @@ router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
 
       for (const annuaire of annuaires) {
         try {
-          // Upsert annuaire
-          const annRes = await pool.query(
+          if (!annuaire.annee) {
+            results.annuaires.errors.push('Annuaire sans année: ignoré');
+            continue;
+          }
+
+          // Upsert sur l'année (contrainte annuaires_annee_key, migration 004).
+          // L'ancien ON CONFLICT (id) ne se déclenchait jamais faute d'id
+          // fourni : réimporter une année créait un second annuaire.
+          const annRes = await client.query(
             `INSERT INTO annuaires (annee, titre_fr, titre_ar)
              VALUES ($1, $2, $3)
-             ON CONFLICT (id) DO NOTHING
+             ON CONFLICT (annee) DO UPDATE
+               SET titre_fr = COALESCE(EXCLUDED.titre_fr, annuaires.titre_fr),
+                   titre_ar = COALESCE(EXCLUDED.titre_ar, annuaires.titre_ar),
+                   updated_at = NOW()
              RETURNING id`,
             [annuaire.annee, annuaire.titre_fr || null, annuaire.titre_ar || null]
           );
-
-          let annuaireId: number;
-          if (annRes.rows.length > 0) {
-            annuaireId = annRes.rows[0].id;
-            results.annuaires.inserted++;
-          } else {
-            // Récupérer l'ID existant
-            const existing = await pool.query(
-              'SELECT id FROM annuaires WHERE annee = $1',
-              [annuaire.annee]
-            );
-            annuaireId = existing.rows[0]?.id;
-            if (!annuaireId) {
-              results.annuaires.errors.push(`Annuaire ${annuaire.annee}: impossible de récupérer l'ID`);
-              continue;
-            }
-          }
+          const annuaireId: number = annRes.rows[0].id;
+          results.annuaires.inserted++;
 
           // Import des thématiques de cet annuaire
           const thematiques = annuaire.thematiques || [];
           for (const them of thematiques) {
             try {
-              // Vérifier si la thématique existe déjà pour cet annuaire
-              const existingThem = await pool.query(
-                'SELECT id FROM thematiques WHERE id_annuaire = $1 AND code = $2',
-                [annuaireId, them.code]
+              await client.query(
+                `INSERT INTO thematiques (code, nom_fr, nom_ar, id_annuaire, nb_indicateurs, fichier_source)
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 ON CONFLICT (id_annuaire, code) DO UPDATE
+                   SET nom_fr = EXCLUDED.nom_fr,
+                       nom_ar = COALESCE(EXCLUDED.nom_ar, thematiques.nom_ar),
+                       nb_indicateurs = EXCLUDED.nb_indicateurs,
+                       fichier_source = EXCLUDED.fichier_source,
+                       updated_at = NOW()`,
+                [them.code, them.nom || them.nom_fr, them.nom_ar || null,
+                 annuaireId, them.nb_indicateurs || null, them.fichier_source || null]
               );
-
-              if (existingThem.rows.length > 0) {
-                // Mise à jour de la thématique existante
-                await pool.query(
-                  `UPDATE thematiques 
-                   SET nom_fr = $1, nb_indicateurs = $2, fichier_source = $3, updated_at = NOW()
-                   WHERE id = $4`,
-                  [them.nom || them.nom_fr, them.nb_indicateurs || null, them.fichier_source || null, existingThem.rows[0].id]
-                );
-                results.thematiques.inserted++; // On comptabilise comme mis à jour/inséré
-              } else {
-                // Insertion si elle n'existe pas
-                await pool.query(
-                  `INSERT INTO thematiques (code, nom_fr, nom_ar, id_annuaire, nb_indicateurs, fichier_source)
-                   VALUES ($1, $2, $3, $4, $5, $6)`,
-                  [them.code, them.nom || them.nom_fr, them.nom_ar || null,
-                   annuaireId, them.nb_indicateurs || null, them.fichier_source || null]
-                );
-                results.thematiques.inserted++;
-              }
+              results.thematiques.inserted++;
             } catch (err: any) {
               results.thematiques.errors.push(`Thém. ${them.code}: ${err.message}`);
             }
@@ -145,7 +144,10 @@ router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
         if (item.tables && Array.isArray(item.tables)) {
           // Nouveau format enveloppé
           for (const t of item.tables) {
-            const annee = t.annuaire_annee || item.annuaire_annee || "2025";
+            // Pas de repli sur une année en dur : sans annuaire_annee, le
+            // tableau était rattaché à 2025 sans le moindre message, quelle
+            // que soit son année réelle.
+            const annee = t.annuaire_annee || item.annuaire_annee || item.annee;
             indicateurs.push({
               code: t.code || `${t.chapter} - ${t.table_number}`,
               thematique_code: t.thematique_code || String(t.chapter),
@@ -177,10 +179,22 @@ router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
         }
       }
 
+      // En mode 'replace', on vide chaque thématique concernée une seule fois,
+      // avant d'insérer ses nouveaux tableaux (le CASCADE emporte tableaux_data,
+      // _indices, _liaisons, _ruptures, _fusion et _corrections).
+      const videes = new Set<number>();
+
       for (const ind of indicateurs) {
         try {
+          if (!ind.annuaire_annee) {
+            results.indicateurs.errors.push(
+              `Indicateur ${ind.code}: annuaire_annee absent — tableau ignoré`
+            );
+            continue;
+          }
+
           // Trouver la thématique par code + annee
-          const themRes = await pool.query(
+          const themRes = await client.query(
             `SELECT th.id FROM thematiques th
              JOIN annuaires a ON th.id_annuaire = a.id
              WHERE th.code = $1 AND a.annee = $2`,
@@ -196,6 +210,15 @@ router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
 
           const id_thematique = themRes.rows[0].id;
 
+          if (mode === 'replace' && !videes.has(id_thematique)) {
+            const del = await client.query(
+              'DELETE FROM tableaux WHERE id_thematique = $1',
+              [id_thematique]
+            );
+            results.supprimes += del.rowCount ?? 0;
+            videes.add(id_thematique);
+          }
+
           // Normaliser les notes pour stockage
           let notesFr = null;
           if (ind.notes) {
@@ -209,7 +232,7 @@ router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
           }
 
           // Insérer le tableau (indicateur)
-          const tabRes = await pool.query(
+          const tabRes = await client.query(
             `INSERT INTO tableaux (code, titre_fr, titre_ar, id_thematique, unite_fr, unite_ar, source_fr, source_ar, notes_fr, notes_ar, annee_reference, source_feuille, ligne_debut, ligne_fin)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
             [
@@ -229,7 +252,7 @@ router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
           if (ind.indices && Array.isArray(ind.indices)) {
             for (const indice of ind.indices) {
               try {
-                await pool.query(
+                await client.query(
                   `INSERT INTO tableaux_indices (id_tableau, code_indice, signification_fr, signification_ar, rattache_type, rattache_valeurs)
                    VALUES ($1, $2, $3, $4, $5, $6)`,
                   [tableauId, indice.code, indice.signification_fr || null,
@@ -261,7 +284,7 @@ router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
                 });
               }
 
-              await pool.query(
+              await client.query(
                 `INSERT INTO tableaux_data (id_tableau, entetes, donnees, merged_cells)
                  VALUES ($1, $2, $3, $4)
                  ON CONFLICT (id_tableau) DO UPDATE SET entetes = $2, donnees = $3, merged_cells = $4, updated_at = NOW()`,
@@ -277,14 +300,19 @@ router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
         }
       }
     } else {
+      await client.query('ROLLBACK');
       res.status(400).json({ error: `Type inconnu: ${type}. Utilisez "metadata" ou "indicateur".` });
       return;
     }
 
+    await client.query('COMMIT');
     res.json({ results });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[ADMIN] Erreur import:', error);
     res.status(500).json({ error: 'Erreur interne lors de l\'import' });
+  } finally {
+    client.release();
   }
 });
 

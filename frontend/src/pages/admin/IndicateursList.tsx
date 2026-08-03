@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { views, annuaires as annuairesApi, thematiques as thematiquesApi } from '@/lib/api';
 import { normalizeThematiqueName } from '@/lib/thematique-utils';
 import { cleanIndicateurTitle, normalizeCode } from '@/lib/indicateur-utils';
@@ -57,15 +57,31 @@ const IndicateursList = () => {
   const [annuaires, setAnnuaires] = useState<Annuaire[]>([]);
   const [thematiques, setThematiques] = useState<Thematique[]>([]);
   
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedAnnuaire, setSelectedAnnuaire] = useState<string>('all');
-  const [selectedThematique, setSelectedThematique] = useState<string>('all');
-  const [page, setPage] = useState(0);
+  // Recherche, filtres et pagination vivent dans l'URL, pas dans un état local :
+  // en revenant d'un tableau, la liste doit se rouvrir à la page consultée et
+  // non repartir de la page 1. Le retour arrière restaure l'URL, donc l'état.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchTerm = searchParams.get('q') || '';
+  const selectedAnnuaire = searchParams.get('annuaire') || 'all';
+  const selectedThematique = searchParams.get('thematique') || 'all';
+  const page = Math.max(0, parseInt(searchParams.get('page') || '0', 10) || 0);
 
-  // Reset page to 0 when filters change
-  useEffect(() => {
-    setPage(0);
-  }, [searchTerm, selectedAnnuaire, selectedThematique]);
+  /** Écrit dans l'URL en n'y laissant que les paramètres utiles. */
+  const majParams = (maj: Record<string, string>, resetPage = true) => {
+    const p = new URLSearchParams(searchParams);
+    Object.entries(maj).forEach(([k, v]) => {
+      if (!v || v === 'all' || v === '0') p.delete(k);
+      else p.set(k, v);
+    });
+    // Tout changement de filtre ramène à la première page
+    if (resetPage) p.delete('page');
+    setSearchParams(p, { replace: true });
+  };
+
+  const setSearchTerm = (v: string) => majParams({ q: v });
+  const setSelectedAnnuaire = (v: string) => majParams({ annuaire: v });
+  const setSelectedThematique = (v: string) => majParams({ thematique: v });
+  const setPage = (v: number) => majParams({ page: String(v) }, false);
 
   useEffect(() => {
     fetchData();

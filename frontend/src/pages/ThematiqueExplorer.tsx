@@ -7,6 +7,7 @@ import { Loader2, ArrowLeft, ArrowRight, Database, Table2, Search } from "lucide
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { normalizeThematiqueName } from "@/lib/thematique-utils";
+import { useRetour } from '@/hooks/useRetour';
 import { getThematiqueIcon } from "@/lib/thematique-icons";
 import { cleanIndicateurTitle, normalizeForComparison } from "@/lib/indicateur-utils";
 
@@ -26,12 +27,20 @@ interface GroupedIndicator {
 }
 
 export default function ThematiqueExplorer() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const retour = useRetour("/");
   const thematiqueName = searchParams.get("thematique") || "";
   const [loading, setLoading] = useState(true);
   const [tableaux, setTableaux] = useState<TableauRow[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  // La recherche vit dans l'URL : en revenant d'un tableau, le filtre saisi
+  // doit être encore là plutôt que remis à zéro.
+  const searchQuery = searchParams.get("q") || "";
+  const setSearchQuery = (v: string) => {
+    const p = new URLSearchParams(searchParams);
+    if (v) p.set("q", v); else p.delete("q");
+    setSearchParams(p, { replace: true });
+  };
 
   useEffect(() => {
     if (!thematiqueName) return;
@@ -103,7 +112,7 @@ export default function ThematiqueExplorer() {
       <header className="glass-card sticky top-0 z-50 border-x-0 border-t-0">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center gap-3 mb-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="rounded-xl">
+            <Button variant="ghost" size="icon" onClick={retour} className="rounded-xl">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div className={`p-2 rounded-xl ${colorClass}`}>

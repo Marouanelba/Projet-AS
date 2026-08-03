@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Loader2, ArrowRight, Database, FileText, BarChart3, Sparkles, CalendarDays, BookOpen, Layers } from "lucide-react";
 import { normalizeThematiqueName } from "@/lib/thematique-utils";
+import { familleDeThematique } from "@/lib/thematique-familles";
 import { getThematiqueIcon } from "@/lib/thematique-icons";
 
 interface Annuaire {
@@ -281,22 +282,27 @@ const Index = () => {
                 </div>
               </div>
             ) : (() => {
-              // Group thematiques by normalized name across all annuaires
-              const uniqueThematiques = new Map<string, { name: string; years: string[]; totalTableaux: number; code: string }>();
+              // Regroupement par FAMILLE et non par nom nettoyé : une même
+              // thématique apparaît sinon sous plusieurs cartes ("Agriculture",
+              // "Agriculture Forets Peche", "Agriculture - Forets - Peche"…).
+              // Le détail des appellations est affiché sur /thematique-famille.
+              const uniqueThematiques = new Map<string, { name: string; years: string[]; totalTableaux: number; code: string; noms: Set<string> }>();
               thematiques.forEach((t) => {
-                const cleanName = normalizeThematiqueName(t.nom_fr);
                 if ((t.nb_indicateurs || 0) === 0) return;
-                const existing = uniqueThematiques.get(cleanName);
+                const famille = familleDeThematique(t.nom_fr);
+                const existing = uniqueThematiques.get(famille);
                 const annee = annuaires.find((a) => a.id === t.id_annuaire)?.annee || "?";
                 if (existing) {
                   if (!existing.years.includes(annee)) existing.years.push(annee);
                   existing.totalTableaux += t.nb_indicateurs || 0;
+                  existing.noms.add(normalizeThematiqueName(t.nom_fr));
                 } else {
-                  uniqueThematiques.set(cleanName, {
-                    name: cleanName,
+                  uniqueThematiques.set(famille, {
+                    name: famille,
                     years: [annee],
                     totalTableaux: t.nb_indicateurs || 0,
                     code: t.code,
+                    noms: new Set([normalizeThematiqueName(t.nom_fr)]),
                   });
                 }
               });
@@ -314,7 +320,7 @@ const Index = () => {
                       <Card
                         key={theme.name}
                         className="group cursor-pointer glass-card-hover gradient-border rounded-2xl border-0 overflow-hidden"
-                        onClick={() => navigate(`/thematique?thematique=${encodeURIComponent(theme.name)}`)}
+                        onClick={() => navigate(`/thematique-famille?famille=${encodeURIComponent(theme.name)}`)}
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
                         <CardContent className="p-6">
@@ -334,6 +340,11 @@ const Index = () => {
                             <Badge variant="outline" className="font-normal text-xs border-primary/20 text-primary">
                               {theme.years.length} année{theme.years.length > 1 ? "s" : ""}
                             </Badge>
+                            {theme.noms.size > 1 && (
+                              <Badge variant="outline" className="font-normal text-xs text-muted-foreground">
+                                {theme.noms.size} appellations
+                              </Badge>
+                            )}
                           </div>
                         </CardContent>
                       </Card>

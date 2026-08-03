@@ -3,6 +3,20 @@
  */
 
 /**
+ * Libellés de remplacement pour les noms restés fautifs ou vides en base.
+ * Correction d'AFFICHAGE uniquement : la base n'est pas modifiée.
+ *
+ * "Chapitre 9" est un libellé provisoire porté par le seul chapitre 9 de 1979
+ * (10 tableaux : voyageurs aux frontières, nuitées, hôtels). Le même chapitre
+ * est correctement nommé en 1980, d'où le libellé retenu.
+ *
+ * Clé = nom nettoyé, en minuscules.
+ */
+const LIBELLES_CORRIGES: Record<string, string> = {
+  'chapitre 9': 'Mouvement Migratoires et Tourisme',
+};
+
+/**
  * Nettoie et normalise le nom d'une thématique
  * - Supprime les préfixes numériques (ex: ".1 ", ".2 ")
  * - Supprime les suffixes d'année (ex: "_as_2025", "a.s 2020", " 2019")
@@ -28,10 +42,14 @@ export const normalizeThematiqueName = (nom: string): string => {
     .replace(/\s+a mis à joiur$/gi, '')     // Suffixe spécifique trouvé dans les données
     .trim();
   
+  // Libellé de remplacement éventuel (avant capitalisation)
+  const corrige = LIBELLES_CORRIGES[clean.toLowerCase()];
+  if (corrige) return corrige;
+
   // Capitalise la première lettre, met le reste en minuscule
   if (clean.length > 0) {
     clean = clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
   }
-  
+
   return clean || 'Non classé';
 };

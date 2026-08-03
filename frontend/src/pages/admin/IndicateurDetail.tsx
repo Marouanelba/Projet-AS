@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Loader2, FileText, Hash, BookOpen, StickyNote, Link2, RefreshCw } from 'lucide-react';
+import { useRetour } from '@/hooks/useRetour';
 
 interface Indicateur {
   id: number;
@@ -61,6 +62,7 @@ interface SerieIndicateur {
 const IndicateurDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const retour = useRetour('/admin/indicateurs');
   const [loading, setLoading] = useState(true);
   const [indicateur, setIndicateur] = useState<Indicateur | null>(null);
   const [thematique, setThematique] = useState<Thematique | null>(null);
@@ -280,7 +282,7 @@ const IndicateurDetail = () => {
     return (
       <AdminLayout>
         <div className="p-8">
-          <Button variant="ghost" onClick={() => navigate('/admin/indicateurs')}>
+          <Button variant="ghost" onClick={retour}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Retour
           </Button>
@@ -297,7 +299,7 @@ const IndicateurDetail = () => {
       <div className="p-8 max-w-6xl">
         <Button 
           variant="ghost" 
-          onClick={() => navigate('/admin/indicateurs')}
+          onClick={retour}
           className="mb-6"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />

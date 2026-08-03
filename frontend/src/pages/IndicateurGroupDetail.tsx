@@ -4,6 +4,7 @@ import { views, tableauxIndices, tableauxData } from "@/lib/api";
 import { cleanIndicateurTitle, extractIndiceFromTitle, normalizeForComparison } from "@/lib/indicateur-utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, BarChart3, Loader2, Calendar, Table as TableIcon, Layers, LineChart, Home, ExternalLink } from "lucide-react";
+import { useRetour } from '@/hooks/useRetour';
 import DataTableWithExport from "@/components/DataTableWithExport";
 import ChartBuilder from "@/components/ChartBuilder";
 
@@ -39,6 +40,7 @@ const computeDynamicFusionAllColumns = (items: FusionInput[]): IndicateurData | 
 
 export default function IndicateurGroupDetail() {
   const navigate = useNavigate(); const [searchParams, setSearchParams] = useSearchParams();
+  const retour = useRetour("/indicateurs");
   const titreParam = searchParams.get("titre"); const significationParam = searchParams.get("signification"); const selectedYear = searchParams.get("year");
   const [loading, setLoading] = useState(true); const [occurrences, setOccurrences] = useState<IndicateurOccurrence[]>([]);
   const [selectedData, setSelectedData] = useState<IndicateurData | null>(null); const [selectedOccurrence, setSelectedOccurrence] = useState<IndicateurOccurrence | null>(null);
@@ -112,8 +114,8 @@ export default function IndicateurGroupDetail() {
   const displayData = showFusion ? fusionData : selectedData;
   const displaySource = showFusion ? "Série fusionnée" : selectedOccurrence ? `AS ${selectedOccurrence.annuaire_annee}` : "";
 
-  if (loading) return (<div className="min-h-screen bg-slate-50"><nav className="glass-nav sticky top-0 z-50"><div className="section-container flex items-center justify-between h-16"><Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link><Link to="/indicateurs" className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</Link></div></nav><div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-[#EA580C]" /></div></div>);
-  if (!titreParam || occurrences.length === 0) return (<div className="min-h-screen bg-slate-50"><nav className="glass-nav sticky top-0 z-50"><div className="section-container flex items-center justify-between h-16"><Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link><Link to="/indicateurs" className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</Link></div></nav><div className="section-container py-16"><div className="glass-strong rounded-2xl p-16 text-center text-slate-600">Aucun tableau trouvé pour "{titreParam}".</div></div></div>);
+  if (loading) return (<div className="min-h-screen bg-slate-50"><nav className="glass-nav sticky top-0 z-50"><div className="section-container flex items-center justify-between h-16"><Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link><button onClick={retour} className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</button></div></nav><div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-[#EA580C]" /></div></div>);
+  if (!titreParam || occurrences.length === 0) return (<div className="min-h-screen bg-slate-50"><nav className="glass-nav sticky top-0 z-50"><div className="section-container flex items-center justify-between h-16"><Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link><button onClick={retour} className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</button></div></nav><div className="section-container py-16"><div className="glass-strong rounded-2xl p-16 text-center text-slate-600">Aucun tableau trouvé pour "{titreParam}".</div></div></div>);
 
   return (
     <div className="min-h-screen bg-slate-50">

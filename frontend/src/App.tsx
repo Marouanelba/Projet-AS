@@ -10,6 +10,7 @@ import Indicateurs from "./pages/Indicateurs";
 import IndicateurPublicDetail from "./pages/IndicateurPublicDetail";
 import IndicateurGroupDetail from "./pages/IndicateurGroupDetail";
 import ThematiqueExplorer from "./pages/ThematiqueExplorer";
+import ThematiqueFamille from "./pages/ThematiqueFamille";
 import TableauThematiqueDetail from "./pages/TableauThematiqueDetail";
 import Auth from "./pages/Auth";
 import IndicateursList from "./pages/admin/IndicateursList";
@@ -45,6 +46,7 @@ const App = () => {
               <Route path="/indicateurs" element={<Indicateurs />} />
               <Route path="/indicateurs/groupe" element={<IndicateurGroupDetail />} />
               <Route path="/indicateurs/:id" element={<IndicateurPublicDetail />} />
+              <Route path="/thematique-famille" element={<ThematiqueFamille />} />
               <Route path="/thematique" element={<ThematiqueExplorer />} />
               <Route path="/thematique/tableau/:id" element={<TableauThematiqueDetail />} />
               <Route path="/auth" element={<Auth />} />

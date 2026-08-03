@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { views, tableauxData, ruptures as rupturesApi } from '@/lib/api';
 import { ArrowLeft, BarChart3, Loader2, RefreshCw, Table as TableIcon, Link2, Layers, LineChart, Home, CalendarDays, Database, FileText } from "lucide-react";
+import { useRetour } from '@/hooks/useRetour';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DataTableWithExport from "@/components/DataTableWithExport";
 import ChartBuilder from "@/components/ChartBuilder";
@@ -86,6 +87,7 @@ const computeDynamicFusion = async (chain: SerieIndicateur[]): Promise<{ entetes
 
 export default function IndicateurPublicDetail() {
   const { id } = useParams(); const navigate = useNavigate(); const [searchParams, setSearchParams] = useSearchParams();
+  const retour = useRetour("/indicateurs");
   const [loading, setLoading] = useState(true); const [indicateur, setIndicateur] = useState<IndicateurSummary | null>(null);
   const [serie, setSerie] = useState<SerieIndicateur[]>([]); const [strategyType, setStrategyType] = useState<StrategyType>("none");
   const [strategyActiveId, setStrategyActiveId] = useState<number | null>(null);
@@ -177,7 +179,7 @@ export default function IndicateurPublicDetail() {
     <div className="min-h-screen bg-slate-50">
       <nav className="glass-nav sticky top-0 z-50"><div className="section-container flex items-center justify-between h-16">
         <Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link>
-        <Link to="/indicateurs" className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</Link>
+        <button onClick={retour} className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</button>
       </div></nav>
       <div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-[#EA580C]" /></div>
     </div>
@@ -186,7 +188,7 @@ export default function IndicateurPublicDetail() {
     <div className="min-h-screen bg-slate-50">
       <nav className="glass-nav sticky top-0 z-50"><div className="section-container flex items-center justify-between h-16">
         <Link to="/" className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#EA580C] to-[#C2410C] flex items-center justify-center"><BarChart3 className="h-4 w-4 text-white" /></div></Link>
-        <Link to="/indicateurs" className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</Link>
+        <button onClick={retour} className="btn-ghost text-sm flex items-center gap-1.5"><ArrowLeft className="h-4 w-4" /> Retour</button>
       </div></nav>
       <div className="section-container py-16"><div className="glass-strong rounded-2xl p-16 text-center text-slate-600">Tableau non trouvé.</div></div>
     </div>
