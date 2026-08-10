@@ -17,6 +17,7 @@ import rupturesRoutes from './routes/ruptures.js';
 import fusionRoutes from './routes/fusion.js';
 import viewsRoutes from './routes/views.js';
 import rpcRoutes from './routes/rpc.js';
+import usersRoutes from './routes/users.js';
 import adminRoutes from './routes/admin.js';
 import correctionsRoutes from './routes/corrections.js';
 
@@ -43,6 +44,7 @@ app.use('/api/corrections', correctionsRoutes);
 app.use('/api/fusion', fusionRoutes);
 app.use('/api/views', viewsRoutes);
 app.use('/api/rpc', rpcRoutes);
+app.use('/api/users', usersRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Health check

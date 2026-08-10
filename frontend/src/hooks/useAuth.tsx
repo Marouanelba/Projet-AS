@@ -5,7 +5,7 @@ interface AuthUser {
   id: number;
   email: string;
   display_name?: string;
-  role?: 'admin' | 'correcteur';
+  role?: 'admin' | 'correcteur' | 'validateur';
   points?: number;
   user_metadata?: { display_name?: string };
 }

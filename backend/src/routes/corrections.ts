@@ -81,11 +81,11 @@ function buildTableauSnapshot(tableau: any, entetesOverride?: any[], donneesOver
 
 /**
  * GET /api/corrections/pending
- * Retrieve all pending corrections across all tables (Admin only)
+ * Retrieve all pending corrections across all tables (Validateur uniquement)
  */
 router.get('/pending', requireAuth, async (req: AuthRequest, res: Response) => {
-  if (req.user?.role !== 'admin') {
-    res.status(403).json({ error: 'Accès interdit. Rôle admin requis.' });
+  if (req.user?.role !== 'validateur') {
+    res.status(403).json({ error: 'Accès interdit. Rôle validateur requis.' });
     return;
   }
   try {
@@ -108,11 +108,11 @@ router.get('/pending', requireAuth, async (req: AuthRequest, res: Response) => {
 
 /**
  * GET /api/corrections/history
- * Retrieve all resolved (approved/rejected) corrections across all tables (Admin only)
+ * Retrieve all resolved (approved/rejected) corrections across all tables (Validateur uniquement)
  */
 router.get('/history', requireAuth, async (req: AuthRequest, res: Response) => {
-  if (req.user?.role !== 'admin') {
-    res.status(403).json({ error: 'Accès interdit. Rôle admin requis.' });
+  if (req.user?.role !== 'validateur') {
+    res.status(403).json({ error: 'Accès interdit. Rôle validateur requis.' });
     return;
   }
   try {
@@ -515,11 +515,11 @@ router.post('/tableaux/:id', requireAuth, async (req: AuthRequest, res: Response
 
 /**
  * POST /api/corrections/:id/approve
- * Approve a pending correction and apply it to database (Admin only)
+ * Approve a pending correction and apply it to database (Validateur uniquement)
  */
 router.post('/:id/approve', requireAuth, async (req: AuthRequest, res: Response) => {
-  if (req.user?.role !== 'admin') {
-    res.status(403).json({ error: 'Accès interdit. Rôle admin requis.' });
+  if (req.user?.role !== 'validateur') {
+    res.status(403).json({ error: 'Accès interdit. Rôle validateur requis.' });
     return;
   }
 
@@ -644,11 +644,11 @@ router.post('/:id/approve', requireAuth, async (req: AuthRequest, res: Response)
 
 /**
  * POST /api/corrections/:id/reject
- * Reject a pending correction (Admin only)
+ * Reject a pending correction (Validateur uniquement)
  */
 router.post('/:id/reject', requireAuth, async (req: AuthRequest, res: Response) => {
-  if (req.user?.role !== 'admin') {
-    res.status(403).json({ error: 'Accès interdit. Rôle admin requis.' });
+  if (req.user?.role !== 'validateur') {
+    res.status(403).json({ error: 'Accès interdit. Rôle validateur requis.' });
     return;
   }
   const { id } = req.params;

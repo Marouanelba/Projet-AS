@@ -63,7 +63,20 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error('[FUSION] Erreur:', error);
+    const err = error as { code?: string; column?: string; detail?: string; message?: string };
+    console.error('[FUSION] Erreur upsert:', err.code, err.message, err.detail);
+
+    // Erreurs de données : le client peut agir dessus, un 500 muet l'en empêche
+    const messages: Record<string, string> = {
+      '22001': 'Une valeur dépasse la taille autorisée par la colonne',
+      '23503': "id_liaison ne correspond à aucune liaison existante",
+      '23502': 'Un champ obligatoire est vide',
+      '22P02': 'Format JSON invalide dans entetes_fusionnees ou donnees_fusionnees',
+    };
+    if (err.code && messages[err.code]) {
+      res.status(400).json({ error: messages[err.code], code: err.code, detail: err.detail });
+      return;
+    }
     res.status(500).json({ error: 'Erreur interne' });
   }
 });

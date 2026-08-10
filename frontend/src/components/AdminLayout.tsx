@@ -10,7 +10,8 @@ import {
   Upload,
   Settings,
   FileSearch,
-  FileCheck
+  FileCheck,
+  Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -30,15 +31,22 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     }
   }, [user, loading, navigate]);
 
-  // Contrôle d'accès et redirection selon le rôle
+  // Contrôle d'accès et redirection selon le rôle.
+  // Trois rôles cloisonnés : le correcteur propose, le validateur arbitre,
+  // l'admin gère les données. Chacun est ramené à son espace s'il s'en écarte.
   useEffect(() => {
     if (!loading && user) {
       const isCorrecteurPath = location.pathname.startsWith('/admin/correcteur');
+      const isValidationPath = location.pathname.startsWith('/admin/validation');
+
       if (user.role === 'correcteur' && !isCorrecteurPath) {
         // Un correcteur n'a droit qu'à l'Espace Correcteur
         navigate('/admin/correcteur');
-      } else if (user.role === 'admin' && isCorrecteurPath) {
-        // Un admin ne fait pas de corrections, redirigé vers l'espace de validation ou les indicateurs
+      } else if (user.role === 'validateur' && !isValidationPath) {
+        // Un validateur n'a droit qu'à la Validation
+        navigate('/admin/validation');
+      } else if (user.role === 'admin' && (isCorrecteurPath || isValidationPath)) {
+        // L'admin ne corrige plus et ne valide plus : ces espaces ont leur rôle
         navigate('/admin/indicateurs');
       }
     }
@@ -61,16 +69,21 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     return null;
   }
 
-  // Filtrer les onglets de la barre latérale selon le rôle
+  // Filtrer les onglets de la barre latérale selon le rôle.
+  // La Validation ne figure plus chez l'admin : elle appartient au validateur.
   const navItems = user.role === 'correcteur'
     ? [
       { href: '/admin/correcteur', label: 'Espace Correcteur', icon: FileSearch },
     ]
+    : user.role === 'validateur'
+    ? [
+      { href: '/admin/validation', label: 'Validation', icon: FileCheck },
+    ]
     : [
       { href: '/admin/indicateurs', label: 'Tableaux', icon: List },
-      { href: '/admin/validation', label: 'Validation', icon: FileCheck },
       { href: '/admin/liaisons', label: 'Liaisons', icon: Link2 },
       { href: '/admin/import', label: 'Import', icon: Upload },
+      { href: '/admin/utilisateurs', label: 'Utilisateurs', icon: Users },
       { href: '/admin/parametres', label: 'Paramètres', icon: Settings },
     ];
 

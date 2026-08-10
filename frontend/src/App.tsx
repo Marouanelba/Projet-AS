@@ -18,6 +18,7 @@ import IndicateurDetail from "./pages/admin/IndicateurDetail";
 import Liaisons from "./pages/admin/Liaisons";
 import ImportData from "./pages/admin/ImportData";
 import Parametres from "./pages/admin/Parametres";
+import Utilisateurs from "./pages/admin/Utilisateurs";
 import CorrecteurWorkspace from "./pages/admin/CorrecteurWorkspace";
 import Validation from "./pages/admin/Validation";
 import NotFound from "./pages/NotFound";
@@ -40,7 +41,14 @@ const App = () => {
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+          {/* Comportements de React Router v7 activés dès maintenant : sans ces
+              drapeaux, la console affiche un avertissement à chaque démarrage.
+              v7_startTransition enveloppe les changements d'état de navigation
+              dans React.startTransition (React 18 requis, ici 18.3.1) ;
+              v7_relativeSplatPath corrige la résolution des liens relatifs dans
+              les routes splat — seule "*" (NotFound) est concernée, et elle ne
+              contient aucun lien relatif. */}
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/indicateurs" element={<Indicateurs />} />
@@ -57,6 +65,7 @@ const App = () => {
               <Route path="/admin/import" element={<ImportData />} />
               <Route path="/admin/correcteur" element={<CorrecteurWorkspace />} />
               <Route path="/admin/validation" element={<Validation />} />
+              <Route path="/admin/utilisateurs" element={<Utilisateurs />} />
               <Route path="/admin/parametres" element={<Parametres />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

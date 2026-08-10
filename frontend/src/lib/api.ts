@@ -493,3 +493,34 @@ const api = {
 };
 
 export default api;
+
+// ============================================================
+// UTILISATEURS (admin uniquement)
+// ============================================================
+export interface Utilisateur {
+  id: number;
+  email: string;
+  display_name: string | null;
+  role: 'admin' | 'correcteur' | 'validateur';
+  points: number | null;
+  created_at: string;
+  nb_corrections?: string | number;
+}
+
+export const users = {
+  async getAll() {
+    return request<Utilisateur[]>('/users');
+  },
+
+  async create(data: { email: string; password: string; display_name?: string; role: 'correcteur' | 'validateur' }) {
+    return request<Utilisateur>('/users', { method: 'POST', body: JSON.stringify(data) });
+  },
+
+  async update(id: number, data: { role?: 'correcteur' | 'validateur'; password?: string; display_name?: string }) {
+    return request<Utilisateur>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  },
+
+  async remove(id: number) {
+    return request<{ message: string }>(`/users/${id}`, { method: 'DELETE' });
+  },
+};

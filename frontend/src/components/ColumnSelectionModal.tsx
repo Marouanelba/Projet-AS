@@ -60,15 +60,21 @@ export const ColumnSelectionModal = ({ open, onOpenChange, liaisonId, sourceId, 
   // Check if a column with same name is already selected from the other source
   const isDuplicate = (col: ColumnInfo) => selectedColumns.some(sc => sc.source !== col.source && sc.name === col.name);
   const toggleColumn = (col: ColumnInfo) => {
-    if (isColumnSelected(col)) setSelectedColumns(prev => prev.filter(sc => !(sc.source === col.source && sc.originalIndex === col.originalIndex)));
-    else {
-      // Warn if duplicate name exists
-      if (isDuplicate(col)) {
-        toast.info(`La colonne "${col.name}" est déjà sélectionnée depuis l'autre tableau.`);
-        return;
-      }
-      setSelectedColumns(prev => [...prev, col]);
+    // Warn if duplicate name exists
+    if (!isColumnSelected(col) && isDuplicate(col)) {
+      toast.info(`La colonne "${col.name}" est déjà sélectionnée depuis l'autre tableau.`);
+      return;
     }
+    // La décision ajouter/retirer se prend sur `prev`, pas sur l'état capturé
+    // au rendu : deux clics rapprochés lisaient sinon la même valeur périmée
+    // et ajoutaient deux fois la colonne, d'où des clés React en double.
+    setSelectedColumns(prev => {
+      const position = prev.findIndex(
+        sc => sc.source === col.source && sc.originalIndex === col.originalIndex
+      );
+      if (position !== -1) return prev.filter((_, i) => i !== position);
+      return [...prev, col];
+    });
   };
 
   const buildFusedTable = (): { entetes: any[][]; donnees: any[][] } => {

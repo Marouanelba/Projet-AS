@@ -18,8 +18,11 @@ const Auth = () => {
   // Redirect if already logged in - must be in useEffect
   useEffect(() => {
     if (user) {
+      // Chaque rôle atterrit sur son espace après connexion
       if (user.role === 'correcteur') {
         navigate('/admin/correcteur');
+      } else if (user.role === 'validateur') {
+        navigate('/admin/validation');
       } else {
         navigate('/admin/indicateurs');
       }
