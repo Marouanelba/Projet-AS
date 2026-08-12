@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, ArrowLeft, Table2, BarChart3, Layers, Calendar } from "lucide-react";
 import { useRetour } from '@/hooks/useRetour';
+import { usePublicationGuard } from '@/hooks/usePublicationGuard';
 import DataTableWithExport from "@/components/DataTableWithExport";
 import ChartBuilder from "@/components/ChartBuilder";
 import ExistingSeriesViewer from "@/components/ExistingSeriesViewer";
@@ -17,6 +18,7 @@ interface TableauWithData { id: number; code: string; titre_fr: string; annuaire
 export default function TableauThematiqueDetail() {
   const { id } = useParams<{ id: string }>(); const [searchParams] = useSearchParams(); const navigate = useNavigate();
   const retour = useRetour("/");
+  usePublicationGuard(id);
   const thematiqueName = searchParams.get("thematique") || ""; const tableauId = parseInt(id || "0");
   const [loading, setLoading] = useState(true); const [tableau, setTableau] = useState<TableauMeta | null>(null);
   const [data, setData] = useState<TableauData | null>(null); const [adjacentWithData, setAdjacentWithData] = useState<TableauWithData[]>([]);

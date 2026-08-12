@@ -6,14 +6,26 @@ const router = Router();
 /**
  * GET /api/annuaires
  * Liste tous les annuaires, triés par année décroissante
+ * ?include_hidden=true pour inclure les annuaires masqués (admin)
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { order } = req.query;
+    const { order, include_hidden } = req.query;
     const orderDir = order === 'asc' ? 'ASC' : 'DESC';
-    const result = await pool.query(`SELECT * FROM annuaires ORDER BY annee ${orderDir}`);
+    const whereClause = include_hidden === 'true' ? '' : "WHERE COALESCE(statut, 'published') = 'published'";
+    const result = await pool.query(`SELECT * FROM annuaires ${whereClause} ORDER BY annee ${orderDir}`);
     res.json(result.rows);
-  } catch (error) {
+  } catch (error: any) {
+    // Fallback: if 'statut' column doesn't exist yet (migration not run), retry without filter
+    if (error?.code === '42703') {
+      try {
+        const { order } = req.query;
+        const orderDir = order === 'asc' ? 'ASC' : 'DESC';
+        const result = await pool.query(`SELECT * FROM annuaires ORDER BY annee ${orderDir}`);
+        res.json(result.rows);
+        return;
+      } catch (e) { /* fall through */ }
+    }
     console.error('[ANNUAIRES] Erreur:', error);
     res.status(500).json({ error: 'Erreur interne' });
   }

@@ -739,6 +739,9 @@ router.post('/annuaires/:annee/pdf-url', async (req: Request, res: Response) => 
  *   - entete_move_col      : move a column (in all header rows + data rows) left/right
  *   - donnees_insert_row   : insert an empty row in donnees at given position
  *   - donnees_delete_row   : delete a row in donnees at given position
+ *   - donnees_move_row     : move a data row up/down
+ *   - donnees_merge_cells  : merge a rectangular range of data cells
+ *   - donnees_unmerge_cells: remove a data merged-cell rule covering (row_index, col_index)
  *
  * New structural operations:
  *   - entete_unmerge_cells : remove a merged-cell rule covering (row_index, col_index)
@@ -1187,6 +1190,138 @@ router.post('/tableaux/:id/structure', requireAuth, async (req: AuthRequest, res
         [id, JSON.stringify(entetes), JSON.stringify(donnees), JSON.stringify(mergedCells)]
       );
 
+    } else if (type_operation === 'donnees_move_row') {
+      // Move a data row up or down
+      if (row_index === undefined || !direction) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: 'row_index et direction requis' });
+        return;
+      }
+      const rIdx = Number(row_index);
+      const targetIdx = direction === 'up' ? rIdx - 1 : rIdx + 1;
+
+      if (targetIdx < 0 || targetIdx >= donnees.length) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: 'Déplacement impossible: hors limites' });
+        return;
+      }
+
+      // Swap rows
+      [donnees[rIdx], donnees[targetIdx]] = [donnees[targetIdx], donnees[rIdx]];
+      description = `Déplacement ligne données ${rIdx + 1} vers ${direction === 'up' ? 'haut' : 'bas'}`;
+
+      await client.query(
+        `INSERT INTO tableaux_data (id_tableau, entetes, donnees)
+         VALUES ($1, $2::jsonb, $3::jsonb)
+         ON CONFLICT (id_tableau) DO UPDATE SET donnees = $3::jsonb, updated_at = NOW()`,
+        [id, JSON.stringify(entetes), JSON.stringify(donnees)]
+      );
+
+    } else if (type_operation === 'donnees_merge_cells') {
+      // Merge data cells in a rectangular range
+      if (start_row === undefined || start_col === undefined || end_row === undefined || end_col === undefined) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: 'start_row, start_col, end_row, end_col requis pour la fusion de données' });
+        return;
+      }
+      const sR = Math.min(start_row, end_row);
+      const eR = Math.max(start_row, end_row);
+      const sC = Math.min(start_col, end_col);
+      const eC = Math.max(start_col, end_col);
+
+      // Collect the first non-empty value in the range
+      let topLeftValue = '';
+      outerData: for (let r = sR; r <= eR; r++) {
+        for (let c = sC; c <= eC; c++) {
+          const v = strOrEmpty(donnees[r]?.[c]);
+          if (v !== '') { topLeftValue = v; break outerData; }
+        }
+      }
+
+      // Write value into top-left, clear others
+      for (let r = sR; r <= eR; r++) {
+        if (!donnees[r]) donnees[r] = [];
+        for (let c = sC; c <= eC; c++) {
+          donnees[r][c] = (r === sR && c === sC) ? topLeftValue : '';
+        }
+      }
+
+      // Store data merged cells separately using prefix "D" to distinguish from header merges
+      const idxToColLetter2 = (n: number): string => {
+        let s = '';
+        n += 1;
+        while (n > 0) {
+          const rem = (n - 1) % 26;
+          s = String.fromCharCode(65 + rem) + s;
+          n = Math.floor((n - 1) / 26);
+        }
+        return s;
+      };
+      const rangeStr = `D${idxToColLetter2(sC)}${sR + 1}:${idxToColLetter2(eC)}${eR + 1}`;
+
+      // Remove overlapping data merge rules
+      mergedCells = mergedCells.filter((mc: any) => {
+        const mcRange: string = mc.range || '';
+        if (!mcRange.startsWith('D')) return true; // keep header merges
+        const m = mcRange.slice(1).match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/i);
+        if (!m) return true;
+        const mcSC = colLetterToIdx(m[1]);
+        const mcSR = parseInt(m[2], 10) - 1;
+        const mcEC = colLetterToIdx(m[3] || m[1]);
+        const mcER = parseInt(m[4] || m[2], 10) - 1;
+        const overlaps = !(mcEC < sC || mcSC > eC || mcER < sR || mcSR > eR);
+        return !overlaps;
+      });
+
+      mergedCells.push({ range: rangeStr, value: strOrEmpty(topLeftValue) });
+      description = `Fusion cellules données ${rangeStr}`;
+
+      await client.query(
+        `INSERT INTO tableaux_data (id_tableau, entetes, donnees, merged_cells)
+         VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb)
+         ON CONFLICT (id_tableau) DO UPDATE SET entetes = $2::jsonb, donnees = $3::jsonb, merged_cells = $4::jsonb, updated_at = NOW()`,
+        [id, JSON.stringify(entetes), JSON.stringify(donnees), JSON.stringify(mergedCells)]
+      );
+
+    } else if (type_operation === 'donnees_unmerge_cells') {
+      // Remove a data merged-cell rule covering (row_index, col_index)
+      if (row_index === undefined || col_index === undefined) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: 'row_index et col_index requis pour annuler la fusion de données' });
+        return;
+      }
+      const rIdx = Number(row_index);
+      const cIdx = Number(col_index);
+
+      const ruleIdx = mergedCells.findIndex((mc: any) => {
+        const mcRange: string = mc.range || '';
+        if (!mcRange.startsWith('D')) return false; // only data merges
+        const m = mcRange.slice(1).match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/i);
+        if (!m) return false;
+        const mcSC = colLetterToIdx(m[1]);
+        const mcSR = parseInt(m[2], 10) - 1;
+        const mcEC = colLetterToIdx(m[3] || m[1]);
+        const mcER = parseInt(m[4] || m[2], 10) - 1;
+        return rIdx >= mcSR && rIdx <= mcER && cIdx >= mcSC && cIdx <= mcEC;
+      });
+
+      if (ruleIdx === -1) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: 'Aucune fusion de données trouvée sur cette cellule' });
+        return;
+      }
+
+      const removedRule = mergedCells[ruleIdx];
+      mergedCells.splice(ruleIdx, 1);
+      description = `Annulation fusion données ${removedRule.range}`;
+
+      await client.query(
+        `INSERT INTO tableaux_data (id_tableau, entetes, donnees, merged_cells)
+         VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb)
+         ON CONFLICT (id_tableau) DO UPDATE SET entetes = $2::jsonb, donnees = $3::jsonb, merged_cells = $4::jsonb, updated_at = NOW()`,
+        [id, JSON.stringify(entetes), JSON.stringify(donnees), JSON.stringify(mergedCells)]
+      );
+
     } else {
       await client.query('ROLLBACK');
       res.status(400).json({ error: `type_operation inconnu: ${type_operation}` });
@@ -1243,6 +1378,89 @@ router.post('/tableaux/:id/structure', requireAuth, async (req: AuthRequest, res
   } catch (err: any) {
     await client.query('ROLLBACK');
     console.error('Erreur POST /api/corrections/tableaux/:id/structure', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * POST /api/corrections/tableaux/:id/structure-rollback
+ * Undo the last structural operation on this tableau.
+ * Only works while in structural editing mode (frontend controls access).
+ * Restores the snapshot_before from the most recent structural correction.
+ */
+router.post('/tableaux/:id/structure-rollback', requireAuth, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const userId = req.user?.id || null;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Find the most recent structural correction for this tableau from this user
+    // (structural corrections have type_element matching structural operation names)
+    const structuralTypes = [
+      'entete_merge_cells', 'entete_unmerge_cells', 'entete_move_row', 'entete_move_col',
+      'entete_insert_row', 'entete_delete_row', 'entete_insert_col', 'entete_delete_col',
+      'donnees_insert_row', 'donnees_delete_row', 'donnees_move_row',
+      'donnees_merge_cells', 'donnees_unmerge_cells'
+    ];
+
+    const lastCorrRes = await client.query(
+      `SELECT * FROM tableaux_corrections
+       WHERE id_tableau = $1 AND user_id = $2 AND type_element = ANY($3::text[])
+       ORDER BY created_at DESC LIMIT 1`,
+      [id, userId, structuralTypes]
+    );
+
+    if (lastCorrRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ error: 'Aucune opération structurelle à annuler' });
+      return;
+    }
+
+    const lastCorr = lastCorrRes.rows[0];
+    const snapshot = lastCorr.snapshot_before;
+
+    if (!snapshot || !snapshot.entetes || !snapshot.donnees) {
+      await client.query('ROLLBACK');
+      res.status(400).json({ error: 'Snapshot avant opération indisponible, rollback impossible' });
+      return;
+    }
+
+    // Restore the snapshot_before state
+    await client.query(
+      `INSERT INTO tableaux_data (id_tableau, entetes, donnees, merged_cells)
+       VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb)
+       ON CONFLICT (id_tableau) DO UPDATE SET entetes = $2::jsonb, donnees = $3::jsonb, merged_cells = $4::jsonb, updated_at = NOW()`,
+      [id, JSON.stringify(snapshot.entetes), JSON.stringify(snapshot.donnees), JSON.stringify(snapshot.merged_cells || [])]
+    );
+
+    // Delete the correction entry we just rolled back
+    await client.query('DELETE FROM tableaux_corrections WHERE id = $1', [lastCorr.id]);
+
+    await client.query('COMMIT');
+
+    // Return updated tableau
+    const finalRes = await pool.query(
+      `SELECT t.*, td.entetes, td.donnees, td.merged_cells, th.nom_fr AS thematique_nom, th.code AS thematique_code, a.annee AS annuaire_annee, a.pdf_url, a.pdf_path
+       FROM tableaux t
+       LEFT JOIN tableaux_data td ON td.id_tableau = t.id
+       JOIN thematiques th ON t.id_thematique = th.id
+       JOIN annuaires a ON th.id_annuaire = a.id
+       WHERE t.id = $1`,
+      [id]
+    );
+
+    res.json({
+      tableau: finalRes.rows[0],
+      rolledBack: lastCorr.type_element,
+      message: `Opération "${lastCorr.valeur_corrigee}" annulée`
+    });
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    console.error('Erreur POST /api/corrections/tableaux/:id/structure-rollback', err);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();

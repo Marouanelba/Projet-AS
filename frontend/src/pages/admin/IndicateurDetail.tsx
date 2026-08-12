@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { tableaux as tableauxApi, thematiques as thematiquesApi, tableauxIndices, tableauxData, annuaires as annuairesApi, views, fusion, liaisons as liaisonsApi } from '@/lib/api';
+import { tableaux as tableauxApi, thematiques as thematiquesApi, tableauxIndices, tableauxData, annuaires as annuairesApi, views, fusion, liaisons as liaisonsApi, admin, getCurrentUser } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Loader2, FileText, Hash, BookOpen, StickyNote, Link2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Loader2, FileText, Hash, BookOpen, StickyNote, Link2, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { useRetour } from '@/hooks/useRetour';
+import { toast } from 'sonner';
 
 interface Indicateur {
   id: number;
@@ -22,6 +23,7 @@ interface Indicateur {
   notes_ar: string | null;
   annee_reference: string | null;
   id_thematique: number;
+  statut?: string;
 }
 
 interface Thematique {
@@ -321,11 +323,42 @@ const IndicateurDetail = () => {
           </div>
           <h1 className="text-2xl font-bold text-foreground mb-2">
             {indicateur.titre_fr}
+            {indicateur.statut === 'hidden' && (
+              <Badge variant="outline" className="ml-3 text-xs bg-amber-50 border-amber-300 text-amber-700 align-middle">
+                <EyeOff className="h-3 w-3 mr-1" /> Masqué
+              </Badge>
+            )}
           </h1>
           {indicateur.titre_ar && (
             <p className="text-xl text-muted-foreground" dir="rtl">
               {indicateur.titre_ar}
             </p>
+          )}
+          {getCurrentUser()?.role === 'admin' && (
+            <Button
+              size="sm"
+              variant="outline"
+              className={`mt-3 h-8 text-xs gap-1.5 rounded-xl ${
+                indicateur.statut === 'hidden'
+                  ? 'border-amber-300 text-amber-700 hover:bg-amber-50'
+                  : 'border-green-300 text-green-700 hover:bg-green-50'
+              }`}
+              onClick={async () => {
+                const newStatut = indicateur.statut === 'hidden' ? 'published' : 'hidden';
+                try {
+                  await admin.setTableauStatut(indicateur.id, newStatut);
+                  setIndicateur({ ...indicateur, statut: newStatut });
+                  toast.success(newStatut === 'published' ? 'Tableau publié' : 'Tableau masqué du front');
+                } catch (err: any) {
+                  toast.error("Erreur", { description: err.message });
+                }
+              }}
+            >
+              {indicateur.statut === 'hidden'
+                ? <><Eye className="h-3.5 w-3.5" /> Publier ce tableau</>
+                : <><EyeOff className="h-3.5 w-3.5" /> Masquer du front</>
+              }
+            </Button>
           )}
         </div>
 

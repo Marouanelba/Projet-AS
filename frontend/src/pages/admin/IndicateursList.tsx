@@ -95,7 +95,7 @@ const IndicateursList = () => {
       let from = 0;
       const pageSize = 1000;
       while (true) {
-        const data = await views.tableauxComplets({ from, to: from + pageSize - 1 });
+        const data = await views.tableauxComplets({ from, to: from + pageSize - 1, include_hidden: true });
         if (!data || data.length === 0) break;
         allRows.push(...(data as Indicateur[]));
         if (data.length < pageSize) break;
@@ -105,7 +105,7 @@ const IndicateursList = () => {
     };
     
     const [annuairesData, thematiquesData, allTableaux] = await Promise.all([
-      annuairesApi.getAll('desc'),
+      annuairesApi.getAll('desc', true),
       thematiquesApi.getAll(),
       fetchAllTableaux()
     ]);

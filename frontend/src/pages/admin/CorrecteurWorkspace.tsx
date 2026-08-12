@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import AdminLayout from '@/components/AdminLayout';
-import { annuaires, thematiques, tableaux, corrections, getCurrentUser } from '@/lib/api';
+import { annuaires, thematiques, tableaux, corrections, getCurrentUser, admin } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +31,10 @@ import {
   ArrowLeft,
   ArrowRight,
   RowsIcon,
-  Columns3
+  Columns3,
+  Undo2,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -40,6 +43,7 @@ interface Annuaire {
   annee: string;
   pdf_url?: string;
   pdf_path?: string;
+  statut?: string;
 }
 
 interface Thematique {
@@ -63,6 +67,7 @@ interface Tableau {
   pdf_url?: string;
   pdf_path?: string;
   annuaire_annee?: string;
+  statut?: string;
 }
 
 interface CorrectionLog {
@@ -81,6 +86,7 @@ interface CorrectionLog {
 export default function CorrecteurWorkspace() {
   // Current user display name (read from JWT token)
   const currentUserDisplayName = getCurrentUser()?.display_name || getCurrentUser()?.email || 'Correcteur';
+  const currentUserRole = getCurrentUser()?.role || 'correcteur';
 
   const [listAnnuaires, setListAnnuaires] = useState<Annuaire[]>([]);
   const [listThematiques, setListThematiques] = useState<Thematique[]>([]);
@@ -191,6 +197,15 @@ export default function CorrecteurWorkspace() {
   // Whether the table is in "structural edit" mode (shows move arrows + selection)
   const [structuralMode, setStructuralMode] = useState(false);
 
+  // Count structural operations in current session (for undo button visibility)
+  const [structuralOpsCount, setStructuralOpsCount] = useState(0);
+
+  // Data cell selection for merge (similar to header selection)
+  const [dataSelection, setDataSelection] = useState<{
+    anchor: { row: number; col: number } | null;
+    focus:  { row: number; col: number } | null;
+  }>({ anchor: null, focus: null });
+
   // Track which header cells and data rows were structurally modified this session.
   // Stored as sets of "rIdx-cIdx" keys for headers, and row indices for inserted rows.
   // We use a simple boolean + correctionHistory to derive highlights.
@@ -200,6 +215,8 @@ export default function CorrecteurWorkspace() {
   useEffect(() => {
     setHasStructuralChanges(false);
     setStructuralMode(false);
+    setStructuralOpsCount(0);
+    setDataSelection({ anchor: null, focus: null });
   }, [selectedTableauId]);
 
   // Parse notes_fr (JSON array or plain string) into structured list
@@ -231,7 +248,7 @@ export default function CorrecteurWorkspace() {
     async function loadAnnuaires() {
       try {
         setLoadingAnnuaires(true);
-        const data = await annuaires.getAll();
+        const data = await annuaires.getAll('desc', currentUserRole === 'admin');
         setListAnnuaires(data);
         if (data.length > 0) {
           setSelectedAnnee(data[0].annee);
@@ -289,7 +306,7 @@ export default function CorrecteurWorkspace() {
         setSelectedTableauId('');
         setCurrentTableau(null);
 
-        const data = await tableaux.getByThematique(selectedThematiqueId);
+        const data = await tableaux.getByThematique(selectedThematiqueId, currentUserRole === 'admin');
         setListTableaux(data);
         if (data.length > 0) {
           setSelectedTableauId(String(data[0].id));
@@ -474,6 +491,41 @@ export default function CorrecteurWorkspace() {
     }
   };
 
+  // Toggle publication status of a tableau
+  const handleToggleTableauStatut = async () => {
+    if (!currentTableau || currentUserRole !== 'admin') return;
+    const newStatut = currentTableau.statut === 'hidden' ? 'published' : 'hidden';
+    try {
+      setSubmitting(true);
+      const updated = await admin.setTableauStatut(currentTableau.id, newStatut);
+      setCurrentTableau({ ...currentTableau, statut: newStatut });
+      setListTableaux(prev => prev.map(t => t.id === currentTableau.id ? { ...t, statut: newStatut } : t));
+      toast.success(newStatut === 'published' ? 'Tableau publié' : 'Tableau masqué du front');
+    } catch (err: any) {
+      toast.error("Erreur lors du changement de statut", { description: err.message });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Toggle publication status of an annuaire
+  const handleToggleAnnuaireStatut = async () => {
+    if (!selectedAnnee || currentUserRole !== 'admin') return;
+    const ann = listAnnuaires.find(a => a.annee === selectedAnnee);
+    if (!ann) return;
+    const newStatut = ann.statut === 'hidden' ? 'published' : 'hidden';
+    try {
+      setSubmitting(true);
+      await admin.setAnnuaireStatut(ann.id, newStatut);
+      setListAnnuaires(prev => prev.map(a => a.id === ann.id ? { ...a, statut: newStatut } : a));
+      toast.success(newStatut === 'published' ? 'Annuaire publié' : 'Annuaire masqué du front');
+    } catch (err: any) {
+      toast.error("Erreur lors du changement de statut", { description: err.message });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // ── Structural helpers ───────────────────────────────────────────────────
 
   // Compute the normalised selection rectangle from anchor+focus
@@ -530,7 +582,9 @@ export default function CorrecteurWorkspace() {
       setCurrentTableau(res.tableau);
       setCorrectionHistory(prev => [res.correction, ...prev]);
       setHeaderSelection({ anchor: null, focus: null });
+      setDataSelection({ anchor: null, focus: null });
       setHasStructuralChanges(true);
+      setStructuralOpsCount(prev => prev + 1);
       toast.success('Opération structurelle enregistrée.');
     } catch (err: any) {
       toast.error("Erreur lors de l'opération", { description: err.message });
@@ -630,6 +684,110 @@ export default function CorrecteurWorkspace() {
     setRowActionModal(prev => ({ ...prev, open: false }));
   };
 
+  // Move data row up/down
+  const handleMoveDataRow = async (rIdx: number, direction: 'up' | 'down') => {
+    await handleStructuralOp({ type_operation: 'donnees_move_row', row_index: rIdx, direction });
+  };
+
+  // Rollback the last structural operation
+  const handleStructuralRollback = async () => {
+    if (!currentTableau) return;
+    try {
+      setSubmitting(true);
+      const res = await corrections.rollbackStructuralCorrection(currentTableau.id);
+      setCurrentTableau(res.tableau);
+      setCorrectionHistory(prev => prev.slice(1)); // Remove latest from local history
+      setStructuralOpsCount(prev => Math.max(0, prev - 1));
+      setHeaderSelection({ anchor: null, focus: null });
+      setDataSelection({ anchor: null, focus: null });
+      toast.success(res.message || 'Opération annulée');
+    } catch (err: any) {
+      toast.error("Erreur lors de l'annulation", { description: err.message });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle a data cell click in structural mode (anchor / extend selection for merge)
+  const handleDataStructuralClick = (rIdx: number, cIdx: number, e: React.MouseEvent) => {
+    if (!structuralMode) return;
+    e.stopPropagation();
+    if (!dataSelection.anchor || !e.shiftKey) {
+      setDataSelection({ anchor: { row: rIdx, col: cIdx }, focus: { row: rIdx, col: cIdx } });
+    } else {
+      setDataSelection(prev => ({ ...prev, focus: { row: rIdx, col: cIdx } }));
+    }
+  };
+
+  // Compute data selection rectangle
+  const dataSelectionRect = useMemo(() => {
+    if (!dataSelection.anchor || !dataSelection.focus) return null;
+    return {
+      start_row: Math.min(dataSelection.anchor.row, dataSelection.focus.row),
+      end_row:   Math.max(dataSelection.anchor.row, dataSelection.focus.row),
+      start_col: Math.min(dataSelection.anchor.col, dataSelection.focus.col),
+      end_col:   Math.max(dataSelection.anchor.col, dataSelection.focus.col),
+    };
+  }, [dataSelection]);
+
+  const isDataCellSelected = (rIdx: number, cIdx: number) => {
+    if (!dataSelectionRect) return false;
+    return (
+      rIdx >= dataSelectionRect.start_row && rIdx <= dataSelectionRect.end_row &&
+      cIdx >= dataSelectionRect.start_col && cIdx <= dataSelectionRect.end_col
+    );
+  };
+
+  // Merge data cells from selection
+  const handleDataMerge = async () => {
+    if (!dataSelectionRect) return;
+    if (dataSelectionRect.start_row === dataSelectionRect.end_row && dataSelectionRect.start_col === dataSelectionRect.end_col) {
+      toast.warning('Sélectionnez au moins 2 cellules pour fusionner.');
+      return;
+    }
+    await handleStructuralOp({
+      type_operation: 'donnees_merge_cells',
+      start_row: dataSelectionRect.start_row,
+      start_col: dataSelectionRect.start_col,
+      end_row: dataSelectionRect.end_row,
+      end_col: dataSelectionRect.end_col,
+    });
+  };
+
+  // Unmerge data cells
+  const handleDataUnmerge = async (rIdx: number, cIdx: number) => {
+    await handleStructuralOp({ type_operation: 'donnees_unmerge_cells', row_index: rIdx, col_index: cIdx });
+  };
+
+  // Check if a data cell belongs to a data merge rule
+  const selectedDataCellMergeRule = useMemo(() => {
+    if (!dataSelectionRect) return null;
+    if (dataSelectionRect.start_row !== dataSelectionRect.end_row || dataSelectionRect.start_col !== dataSelectionRect.end_col) return null;
+    const rIdx = dataSelectionRect.start_row;
+    const cIdx = dataSelectionRect.start_col;
+    const list = currentTableau?.merged_cells
+      ? (typeof currentTableau.merged_cells === 'string'
+          ? JSON.parse(currentTableau.merged_cells)
+          : currentTableau.merged_cells)
+      : [];
+    return list.find((mc: any) => {
+      const rangeStr: string = mc.range || '';
+      if (!rangeStr.startsWith('D')) return false;
+      const m = rangeStr.slice(1).match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/i);
+      if (!m) return false;
+      const colLetterToIdxLocal = (s: string) => {
+        let idx = 0; const str = s.toUpperCase();
+        for (let i = 0; i < str.length; i++) idx = idx * 26 + (str.charCodeAt(i) - 65 + 1);
+        return idx - 1;
+      };
+      const mcSC = colLetterToIdxLocal(m[1]);
+      const mcSR = parseInt(m[2], 10) - 1;
+      const mcEC = colLetterToIdxLocal(m[3] || m[1]);
+      const mcER = parseInt(m[4] || m[2], 10) - 1;
+      return rIdx >= mcSR && rIdx <= mcER && cIdx >= mcSC && cIdx <= mcEC;
+    }) ?? null;
+  }, [dataSelectionRect, currentTableau?.merged_cells]);
+
   // Check if a cell has been corrected
   const isCellCorrected = (rIdx: number, cIdx: number) => {
     return correctionHistory.some(c => c.type_element === 'cellule' && c.row_index === rIdx && c.col_index === cIdx);
@@ -651,7 +809,7 @@ export default function CorrecteurWorkspace() {
     return idx - 1;
   };
 
-  const parseMergedCells = (mergedCells: any) => {
+  const parseMergedCells = (mergedCells: any, filterType: 'header' | 'data' | 'all' = 'header') => {
     if (!mergedCells) return [];
     const list = typeof mergedCells === 'string' ? JSON.parse(mergedCells) : mergedCells;
     if (!Array.isArray(list)) return [];
@@ -662,7 +820,12 @@ export default function CorrecteurWorkspace() {
       const rangeStr = item.range || (typeof item === 'string' ? item : '');
       if (!rangeStr) continue;
 
-      const match = rangeStr.match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/i);
+      const isDataMerge = rangeStr.startsWith('D');
+      if (filterType === 'header' && isDataMerge) continue;
+      if (filterType === 'data' && !isDataMerge) continue;
+
+      const parseStr = isDataMerge ? rangeStr.slice(1) : rangeStr;
+      const match = parseStr.match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/i);
       if (!match) continue;
 
       const startColStr = match[1];
@@ -688,10 +851,28 @@ export default function CorrecteurWorkspace() {
     return rules;
   };
 
-  const mergedRules = parseMergedCells(currentTableau?.merged_cells);
+  const mergedRules = parseMergedCells(currentTableau?.merged_cells, 'header');
+  const dataMergedRules = parseMergedCells(currentTableau?.merged_cells, 'data');
 
   const getMergeInfo = (rIdx: number, cIdx: number) => {
     const rule = mergedRules.find(
+      m => rIdx >= m.startRow && rIdx <= m.endRow && cIdx >= m.startCol && cIdx <= m.endCol
+    );
+    if (!rule) {
+      return { isTopLeft: true, isMerged: false, rowspan: 1, colspan: 1, value: undefined };
+    }
+    const isTopLeft = rIdx === rule.startRow && cIdx === rule.startCol;
+    return {
+      isTopLeft,
+      isMerged: true,
+      rowspan: rule.rowspan,
+      colspan: rule.colspan,
+      value: rule.value
+    };
+  };
+
+  const getDataMergeInfo = (rIdx: number, cIdx: number) => {
+    const rule = dataMergedRules.find(
       m => rIdx >= m.startRow && rIdx <= m.endRow && cIdx >= m.startCol && cIdx <= m.endCol
     );
     if (!rule) {
@@ -763,11 +944,29 @@ export default function CorrecteurWorkspace() {
               ) : (
                 listAnnuaires.map(a => (
                   <option key={a.id} value={a.annee}>
-                    {a.annee} {a.pdf_url ? '📄 (PDF disponible)' : ''}
+                    {a.annee} {a.pdf_url ? '📄' : ''}{a.statut === 'hidden' ? ' 🚫 (masqué)' : ''}
                   </option>
                 ))
               )}
             </select>
+            {currentUserRole === 'admin' && selectedAnnee && (
+              <Button
+                size="sm"
+                variant="outline"
+                className={`mt-1 h-7 text-[11px] gap-1.5 rounded-xl w-full ${
+                  listAnnuaires.find(a => a.annee === selectedAnnee)?.statut === 'hidden'
+                    ? 'border-amber-300 text-amber-700 hover:bg-amber-50'
+                    : 'border-green-300 text-green-700 hover:bg-green-50'
+                }`}
+                disabled={submitting}
+                onClick={handleToggleAnnuaireStatut}
+              >
+                {listAnnuaires.find(a => a.annee === selectedAnnee)?.statut === 'hidden'
+                  ? <><Eye className="h-3.5 w-3.5" /> Publier l'annuaire</>
+                  : <><EyeOff className="h-3.5 w-3.5" /> Masquer l'annuaire</>
+                }
+              </Button>
+            )}
           </div>
 
           {/* 2. Thématique (Chapitre) */}
@@ -813,7 +1012,7 @@ export default function CorrecteurWorkspace() {
               ) : (
                 listTableaux.map(t => (
                   <option key={t.id} value={t.id}>
-                    {t.code ? `[${t.code}] ` : ''}{t.titre_fr.slice(0, 60)}...
+                    {t.statut === 'hidden' ? '🚫 ' : ''}{t.code ? `[${t.code}] ` : ''}{t.titre_fr.slice(0, 60)}...
                   </option>
                 ))
               )}
@@ -880,6 +1079,11 @@ export default function CorrecteurWorkspace() {
                           >
                             <Edit3 className="h-3.5 w-3.5" />
                           </Button>
+                          {currentTableau.statut === 'hidden' && (
+                            <Badge variant="outline" className="text-[10px] bg-amber-50 border-amber-300 text-amber-700">
+                              <EyeOff className="h-3 w-3 mr-1" /> Masqué
+                            </Badge>
+                          )}
                         </div>
 
                         {currentTableau.titre_ar && (
@@ -888,6 +1092,24 @@ export default function CorrecteurWorkspace() {
                           </p>
                         )}
                       </div>
+                      {currentUserRole === 'admin' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className={`h-8 text-[11px] gap-1.5 rounded-xl shrink-0 ${
+                            currentTableau.statut === 'hidden'
+                              ? 'border-amber-300 text-amber-700 hover:bg-amber-50'
+                              : 'border-green-300 text-green-700 hover:bg-green-50'
+                          }`}
+                          disabled={submitting}
+                          onClick={handleToggleTableauStatut}
+                        >
+                          {currentTableau.statut === 'hidden'
+                            ? <><Eye className="h-3.5 w-3.5" /> Publier</>
+                            : <><EyeOff className="h-3.5 w-3.5" /> Masquer</>
+                          }
+                        </Button>
+                      )}
                     </CardHeader>
 
                     <CardContent className="p-4 pt-3 text-xs text-slate-600 space-y-1.5">
@@ -972,6 +1194,7 @@ export default function CorrecteurWorkspace() {
                           onClick={() => {
                             setStructuralMode(v => !v);
                             setHeaderSelection({ anchor: null, focus: null });
+                            setDataSelection({ anchor: null, focus: null });
                           }}
                         >
                           <Columns3 className="h-3.5 w-3.5" />
@@ -992,6 +1215,25 @@ export default function CorrecteurWorkspace() {
                     {structuralMode && (
                       <TooltipProvider delayDuration={200}>
                         <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-indigo-50 border-b border-indigo-200">
+                          {/* Undo button */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[11px] gap-1 rounded-lg border-amber-400 text-amber-700 hover:bg-amber-50 disabled:opacity-40"
+                                disabled={structuralOpsCount === 0 || submitting}
+                                onClick={handleStructuralRollback}
+                              >
+                                <Undo2 className="h-3.5 w-3.5" />
+                                Annuler
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">Annuler la dernière opération structurelle</TooltipContent>
+                          </Tooltip>
+
+                          <div className="w-px h-5 bg-indigo-200" />
+
                           <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider mr-1">En-têtes</span>
 
                           {/* Merge */}
@@ -1102,6 +1344,67 @@ export default function CorrecteurWorkspace() {
                                 onClick={() => setHeaderSelection({ anchor: null, focus: null })}
                               >
                                 ✕ Effacer
+                              </Button>
+                            </>
+                          )}
+
+                          <div className="w-px h-5 bg-indigo-200" />
+
+                          {/* Data cells merge section */}
+                          <span className="text-[10px] font-bold text-teal-700 uppercase tracking-wider mr-1">Données</span>
+
+                          {/* Data Merge */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[11px] gap-1 rounded-lg border-teal-300 text-teal-800 hover:bg-teal-50 disabled:opacity-40"
+                                disabled={!dataSelectionRect || (dataSelectionRect.start_row === dataSelectionRect.end_row && dataSelectionRect.start_col === dataSelectionRect.end_col) || submitting}
+                                onClick={handleDataMerge}
+                              >
+                                <MergeIcon className="h-3.5 w-3.5" />
+                                Fusionner
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">Shift+clic sur les cellules de données pour les sélectionner, puis fusionnez</TooltipContent>
+                          </Tooltip>
+
+                          {/* Data Unmerge */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[11px] gap-1 rounded-lg border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-40"
+                                disabled={!selectedDataCellMergeRule || submitting}
+                                onClick={() => {
+                                  if (dataSelectionRect) handleDataUnmerge(dataSelectionRect.start_row, dataSelectionRect.start_col);
+                                }}
+                              >
+                                <ArrowLeft className="h-3 w-3" /><ArrowRight className="h-3 w-3 -ml-1.5" />
+                                Défusionner
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">
+                              {selectedDataCellMergeRule ? `Annuler la fusion ${selectedDataCellMergeRule.range}` : 'Sélectionnez une cellule de données fusionnée'}
+                            </TooltipContent>
+                          </Tooltip>
+
+                          {dataSelectionRect && (
+                            <>
+                              <Badge variant="outline" className="text-[10px] bg-white border-teal-300 text-teal-700 font-mono">
+                                Données: L{dataSelectionRect.start_row + 1}C{dataSelectionRect.start_col + 1}
+                                {(dataSelectionRect.start_row !== dataSelectionRect.end_row || dataSelectionRect.start_col !== dataSelectionRect.end_col) &&
+                                  ` → L${dataSelectionRect.end_row + 1}C${dataSelectionRect.end_col + 1}`}
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-[11px] text-slate-500 hover:text-red-600 rounded-lg"
+                                onClick={() => setDataSelection({ anchor: null, focus: null })}
+                              >
+                                ✕
                               </Button>
                             </>
                           )}
@@ -1319,6 +1622,19 @@ export default function CorrecteurWorkspace() {
                                         <TooltipTrigger asChild>
                                           <Button
                                             variant="ghost" size="icon"
+                                            className="h-5 w-5 hover:bg-indigo-200 text-indigo-700 rounded"
+                                            disabled={rIdx === 0 || submitting}
+                                            onClick={() => handleMoveDataRow(rIdx, 'up')}
+                                          >
+                                            <ArrowUp className="h-3 w-3" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="left" className="text-xs">Monter cette ligne</TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost" size="icon"
                                             className="h-5 w-5 hover:bg-green-100 text-green-700 rounded"
                                             disabled={submitting}
                                             onClick={() => openRowActionModal(rIdx, 'insert_before')}
@@ -1342,6 +1658,19 @@ export default function CorrecteurWorkspace() {
                                         </TooltipTrigger>
                                         <TooltipContent side="left" className="text-xs">Supprimer cette ligne</TooltipContent>
                                       </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost" size="icon"
+                                            className="h-5 w-5 hover:bg-indigo-200 text-indigo-700 rounded"
+                                            disabled={rIdx === rowsList.length - 1 || submitting}
+                                            onClick={() => handleMoveDataRow(rIdx, 'down')}
+                                          >
+                                            <ArrowDown className="h-3 w-3" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="left" className="text-xs">Descendre cette ligne</TooltipContent>
+                                      </Tooltip>
                                     </div>
                                   </TooltipProvider>
                                 </td>
@@ -1349,24 +1678,39 @@ export default function CorrecteurWorkspace() {
 
                               {dRow.map((cellVal: any, cIdx: number) => {
                                 const corrected = isCellCorrected(rIdx, cIdx);
+                                const dataMerge = getDataMergeInfo(rIdx, cIdx);
+                                if (dataMerge.isMerged && !dataMerge.isTopLeft) return null;
+                                const cellText = String(cellVal ?? dataMerge.value ?? '');
+                                const dataSelected = isDataCellSelected(rIdx, cIdx);
                                 return (
                                   <td
                                     key={cIdx}
-                                    onClick={() => !structuralMode && handleCellClick(rIdx, cIdx, cellVal)}
+                                    rowSpan={dataMerge.rowspan}
+                                    colSpan={dataMerge.colspan}
+                                    onClick={(e) => {
+                                      if (structuralMode) {
+                                        handleDataStructuralClick(rIdx, cIdx, e);
+                                      } else {
+                                        handleCellClick(rIdx, cIdx, cellVal);
+                                      }
+                                    }}
                                     className={`p-2 border-r border-slate-200 text-slate-900 transition-all ${
-                                      structuralMode
-                                        ? 'cursor-default'
+                                      dataSelected
+                                        ? 'bg-teal-200 border-teal-400 text-teal-900 ring-1 ring-inset ring-teal-400 cursor-pointer'
+                                        : structuralMode
+                                        ? 'hover:bg-teal-50 cursor-pointer'
                                         : corrected
                                         ? 'bg-emerald-100/80 font-bold border-emerald-400 text-emerald-950 shadow-inner cursor-pointer'
                                         : hasStructuralChanges
                                         ? 'bg-violet-50/60 border-violet-100 hover:bg-violet-100 cursor-pointer'
                                         : 'hover:bg-[#EA580C]/10 hover:font-semibold cursor-pointer'
                                     }`}
-                                    title={!structuralMode ? 'Cliquer pour corriger cette cellule' : undefined}
+                                    title={structuralMode ? 'Cliquer pour sélectionner — Shift+clic pour étendre' : 'Cliquer pour corriger cette cellule'}
                                   >
                                     <div className="flex items-center justify-between gap-1">
-                                      <span>{String(cellVal ?? '')}</span>
-                                      {corrected && !structuralMode && <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />}
+                                      <span>{cellText}</span>
+                                      {corrected && !structuralMode && !dataSelected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />}
+                                      {dataSelected && <span className="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0" />}
                                     </div>
                                   </td>
                                 );

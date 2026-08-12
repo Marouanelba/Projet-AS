@@ -147,8 +147,8 @@ export const auth = {
 // ============================================================
 
 export const annuaires = {
-  async getAll(order: 'asc' | 'desc' = 'desc') {
-    return request<any[]>('/annuaires', { params: { order } });
+  async getAll(order: 'asc' | 'desc' = 'desc', include_hidden = false) {
+    return request<any[]>('/annuaires', { params: { order, ...(include_hidden ? { include_hidden: 'true' } : {}) } });
   },
 
   async getById(id: number) {
@@ -185,8 +185,8 @@ export const thematiques = {
 // ============================================================
 
 export const tableaux = {
-  async getAll(from = 0, to = 999) {
-    return request<any[]>('/tableaux', { params: { from, to } });
+  async getAll(from = 0, to = 999, include_hidden = false) {
+    return request<any[]>('/tableaux', { params: { from, to, ...(include_hidden ? { include_hidden: 'true' } : {}) } });
   },
 
   async getById(id: number) {
@@ -198,8 +198,12 @@ export const tableaux = {
     return request<any>(`/tableaux/${id}`);
   },
 
-  async getByThematique(thematiqueId: number | string) {
-    return request<any[]>('/tableaux', { params: { id_thematique: thematiqueId } });
+  async getByThematique(thematiqueId: number | string, include_hidden = false) {
+    return request<any[]>('/tableaux', { params: { id_thematique: thematiqueId, ...(include_hidden ? { include_hidden: 'true' } : {}) } });
+  },
+
+  async getStatut(id: number | string) {
+    return request<{ statut: string }>(`/tableaux/${id}/statut`);
   },
 };
 
@@ -329,7 +333,7 @@ export const views = {
     return request<any[]>('/views/series-temporelles', { params: { from, to } });
   },
 
-  async tableauxComplets(options?: { select?: string; order_by?: string; order_dir?: string; from?: number; to?: number }) {
+  async tableauxComplets(options?: { select?: string; order_by?: string; order_dir?: string; from?: number; to?: number; include_hidden?: boolean }) {
     return request<any[]>('/views/tableaux-complets', {
       params: {
         select: options?.select,
@@ -337,6 +341,7 @@ export const views = {
         order_dir: options?.order_dir,
         from: options?.from ?? 0,
         to: options?.to ?? 999,
+        ...(options?.include_hidden ? { include_hidden: 'true' } : {}),
       },
     });
   },
@@ -389,6 +394,20 @@ export const admin = {
       method: 'POST',
     });
   },
+
+  async setTableauStatut(id: number | string, statut: 'published' | 'hidden') {
+    return request<any>(`/admin/tableaux/${id}/statut`, {
+      method: 'PATCH',
+      body: JSON.stringify({ statut }),
+    });
+  },
+
+  async setAnnuaireStatut(id: number | string, statut: 'published' | 'hidden') {
+    return request<any>(`/admin/annuaires/${id}/statut`, {
+      method: 'PATCH',
+      body: JSON.stringify({ statut }),
+    });
+  },
 };
 
 export const corrections = {
@@ -424,7 +443,10 @@ export const corrections = {
       | 'entete_insert_col'
       | 'entete_delete_col'
       | 'donnees_insert_row'
-      | 'donnees_delete_row';
+      | 'donnees_delete_row'
+      | 'donnees_move_row'
+      | 'donnees_merge_cells'
+      | 'donnees_unmerge_cells';
     commentaire?: string;
     user_display_name?: string;
     // merge / unmerge cells
@@ -441,6 +463,12 @@ export const corrections = {
     return request<{ tableau: any; correction: any }>(`/corrections/tableaux/${id}/structure`, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  async rollbackStructuralCorrection(id: number | string) {
+    return request<{ tableau: any; rolledBack: string; message: string }>(`/corrections/tableaux/${id}/structure-rollback`, {
+      method: 'POST',
     });
   },
 

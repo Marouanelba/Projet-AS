@@ -316,4 +316,66 @@ router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * PATCH /api/admin/tableaux/:id/statut
+ * Change le statut de publication d'un tableau (published / hidden)
+ */
+router.patch('/tableaux/:id/statut', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (req.user?.role !== 'admin') {
+      res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+      return;
+    }
+    const { id } = req.params;
+    const { statut } = req.body;
+    if (!statut || !['published', 'hidden'].includes(statut)) {
+      res.status(400).json({ error: 'statut doit être "published" ou "hidden"' });
+      return;
+    }
+    const result = await pool.query(
+      'UPDATE tableaux SET statut = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [statut, id]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Tableau non trouvé' });
+      return;
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('[ADMIN] Erreur PATCH tableaux statut:', error);
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
+/**
+ * PATCH /api/admin/annuaires/:id/statut
+ * Change le statut de publication d'un annuaire (published / hidden)
+ */
+router.patch('/annuaires/:id/statut', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (req.user?.role !== 'admin') {
+      res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+      return;
+    }
+    const { id } = req.params;
+    const { statut } = req.body;
+    if (!statut || !['published', 'hidden'].includes(statut)) {
+      res.status(400).json({ error: 'statut doit être "published" ou "hidden"' });
+      return;
+    }
+    const result = await pool.query(
+      'UPDATE annuaires SET statut = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [statut, id]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Annuaire non trouvé' });
+      return;
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('[ADMIN] Erreur PATCH annuaires statut:', error);
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
 export default router;

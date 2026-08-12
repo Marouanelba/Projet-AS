@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { views, tableauxData, ruptures as rupturesApi } from '@/lib/api';
 import { ArrowLeft, BarChart3, Loader2, RefreshCw, Table as TableIcon, Link2, Layers, LineChart, Home, CalendarDays, Database, FileText } from "lucide-react";
 import { useRetour } from '@/hooks/useRetour';
+import { usePublicationGuard } from '@/hooks/usePublicationGuard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DataTableWithExport from "@/components/DataTableWithExport";
 import ChartBuilder from "@/components/ChartBuilder";
@@ -88,6 +89,7 @@ const computeDynamicFusion = async (chain: SerieIndicateur[]): Promise<{ entetes
 export default function IndicateurPublicDetail() {
   const { id } = useParams(); const navigate = useNavigate(); const [searchParams, setSearchParams] = useSearchParams();
   const retour = useRetour("/indicateurs");
+  usePublicationGuard(id);
   const [loading, setLoading] = useState(true); const [indicateur, setIndicateur] = useState<IndicateurSummary | null>(null);
   const [serie, setSerie] = useState<SerieIndicateur[]>([]); const [strategyType, setStrategyType] = useState<StrategyType>("none");
   const [strategyActiveId, setStrategyActiveId] = useState<number | null>(null);
